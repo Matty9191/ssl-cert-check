@@ -250,20 +250,30 @@ MKTEMP=$(which mktemp)
 if [ -f /usr/bin/mailx ]
 then
     MAIL="/usr/bin/mailx"
+    MAILMODE="mailx"
 elif [ -f /bin/mail ]
 then
     MAIL="/bin/mail"
+    MAILMODE="mail"
 elif [ -f /usr/bin/mail ]
 then
     MAIL="/usr/bin/mail"
+    MAILMODE="mail"
 elif [ -f /sbin/mail ]
 then
     MAIL="/sbin/mail"
+    MAILMODE="mail"
 elif [ -f /usr/sbin/mail ]
 then
     MAIL="/usr/sbin/mail"
+    MAILMODE="mail"
+elif [ -f /usr/sbin/sendmail ]
+then
+    MAIL="/usr/sbin/sendmail"
+    MAILMODE="sendmail"    
 else
     MAIL="cantfindit"
+    MAILMODE="cantfindit"
 fi
 
 # Return code used by nagios. Initialize to 0.
@@ -271,6 +281,35 @@ RETCODE=0
 
 # Set the default umask to be somewhat restrictive
 umask 077
+
+
+#####################################################
+### Send email
+### Accepts three parameters:
+###  $1 -> email to send mail
+###  $2 -> Subject
+###  $3 -> Message
+#####################################################
+send_mail() {
+
+    TO=${1}
+    SUBJECT=${2}
+    MSG=${3}
+
+    case "${MAILMODE}" in
+        "mail" | "mailx")
+            echo "$MSG" | ${MAIL} -s "$SUBJECT" $TO
+            ;;
+        "sendmail")
+            echo "Subject:$SUBJECT"$'\n'"$MSG" | ${MAIL} -t $TO
+            ;;
+        "*")
+            echo "ERROR: You enabled automated alerts, but the mail binary could not be found."
+            echo "FIX: Please modify the ${MAIL} and ${$MAILMODE} variable in the program header."
+            exit 1
+            ;;
+    esac
+}
 
 #############################################################################
 # Purpose: Convert a date from MONTH-DAY-YEAR to Julian format
@@ -603,8 +642,8 @@ check_file_status() {
     then
         if [ "${ALARM}" = "TRUE" ]
         then
-            echo "The SSL certificate for ${HOST} \"(CN: ${COMMONNAME})\" has expired!" \
-                 | ${MAIL} -s "Certificate for ${HOST} \"(CN: ${COMMONNAME})\" has expired!" ${ADMIN}
+            send_mail ${ADMIN} "Certificate for ${HOST} \"(CN: ${COMMONNAME})\" has expired!" \
+                "The SSL certificate for ${HOST} \"(CN: ${COMMONNAME})\" has expired!"
         fi
 
         prints ${HOST} ${PORT} "Expired" "${CERTDATE}" "${CERTDIFF}" "${CERTISSUER}" "${COMMONNAME}" "${SERIAL}"
@@ -614,8 +653,8 @@ check_file_status() {
     then
         if [ "${ALARM}" = "TRUE" ]
         then
-            echo "The SSL certificate for ${HOST} \"(CN: ${COMMONNAME})\" will expire on ${CERTDATE}" \
-                 | ${MAIL} -s "Certificate for ${HOST} \"(CN: ${COMMONNAME})\" will expire in ${WARNDAYS}-days or less" ${ADMIN}
+            send_mail ${ADMIN} "Certificate for ${HOST} \"(CN: ${COMMONNAME})\" will expire in ${WARNDAYS}-days or less" \
+                "The SSL certificate for ${HOST} \"(CN: ${COMMONNAME})\" will expire on ${CERTDATE}"
         fi
         prints ${HOST} ${PORT} "Expiring" "${CERTDATE}" "${CERTDIFF}" "${CERTISSUER}" "${COMMONNAME}" "${SERIAL}" 
         RETCODE=1
