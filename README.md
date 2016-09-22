@@ -4,6 +4,9 @@ ssl-cert-check is a Bourne shell script that can be used to check and report  on
 
 # Example:
 <pre>
+
+Print the expiration times for one or more certificates listed in ssldomains:
+
 $ ssl-cert-check -f ssldomains
 Host                                            Status       Expires      Days Left
 ----------------------------------------------- ------------ ------------ ----------
@@ -12,6 +15,12 @@ mail.prefetch.net:993                           Valid        Jun 20 2006  246
 gmail.google.com:443                            Valid        Jun 7 2006   233
 www.sun.com:443                                 Valid        May 11 2009  1302
 www.spotch.com:443                              Connection refused Unknown Unknown
+</pre>
+
+Send an e-mail to admin@prefetch.net if a domain listed in ssldomains will expire in the next 60-days:
+
+<pre>
+$ ssl-cert-check -a -f ssldomains -q -x 60 -e admin@prefetch.net
 </pre>
 
 # Additional Documentation
