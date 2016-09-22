@@ -26,7 +26,7 @@ Usage: ./ssl-cert-check [ -e email address ] [ -x days ] [-q] [-a] [-b] [-h] [-i
   -x days           : Certificate expiration interval (eg. if cert_date < days)
 </pre>
 
-# Example:
+# Examples:
 <pre>
 
 Print the expiration times for one or more certificates listed in ssldomains:
