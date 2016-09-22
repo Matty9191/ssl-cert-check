@@ -3,7 +3,7 @@
 ssl-cert-check is a Bourne shell script that can be used to check and report  on expiring SSL certificates. The script was designed to be run from cron and can e-mail notifications or log alerts through nagios.  
 
 # Usage:
-
+<pre>
 $ ./ssl-cert-check
 Usage: ./ssl-cert-check [ -e email address ] [ -x days ] [-q] [-a] [-b] [-h] [-i] [-n] [-v]
        { [ -s common_name ] && [ -p port] } || { [ -f cert_file ] } || { [ -c certificate file ] }
@@ -24,7 +24,7 @@ Usage: ./ssl-cert-check [ -e email address ] [ -x days ] [-q] [-a] [-b] [-h] [-i
   -v                : Specify a specific protocol version to use (tls, ssl2, ssl3)
   -V                : Only print validation data
   -x days           : Certificate expiration interval (eg. if cert_date < days)
-
+</pre>
 
 # Example:
 <pre>
