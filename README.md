@@ -46,7 +46,7 @@ www.spotch.com:443                              Connection refused Unknown Unkno
 Check all certificates with file pattern "/etc/haproxy/ssl/\*.pem"
 
 <pre>
-$ ssl-cert-check -d "/etc/haproxy/ssl/\*.pem"
+$ ssl-cert-check -d "/etc/haproxy/ssl/*.pem"
 Host                                            Status       Expires      Days
 ----------------------------------------------- ------------ ------------ ----
 FILE:/etc/haproxy/ssl/example1.org.pem      Valid        Jan 6 2017   78                                 
