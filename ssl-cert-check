@@ -8,9 +8,13 @@
 #
 # Author: Matty < matty91 at gmail dot com >
 #
-# Current Version: 3.29
+# Current Version: 3.30
 #
 # Revision History:
+#
+# Version 3.30
+#  - Use highest returncode for Nagios output -- Marcel Pennewiss
+#  - Set RETCODE to 3 (unknown) if a certificate file does not exist -- Marcel Pennewiss
 #
 # Version 3.29
 #  - Add the openssl -servername flag if it shows up in help.
@@ -198,6 +202,7 @@
 #  -- FreeBSD using /bin/sh
 #  -- Centos Linux 3, 4, 5 & 6 using /bin/bash
 #  -- Redhat Enterprise Linux 3, 4, 5 & 6 using /bin/bash
+#  -- Gentoo using /bin/bash
 # 
 # Usage:
 #  Refer to the usage() sub-routine, or invoke ssl-cert-check 
@@ -416,6 +421,18 @@ print_heading()
     fi
 }
 
+#############################################################
+# Purpose: Set returncode to value if current value is lower
+# Arguments:
+#   $1 -> New returncorde
+#############################################################
+set_returncode()
+{
+    if [ ${RETCODE} -lt ${1} ]
+    then
+        RETCODE=${1}
+    fi
+}
 
 ##########################################
 # Purpose: Describe how the script works
@@ -494,32 +511,32 @@ check_server_status() {
     if ${GREP} -i  "Connection refused" ${ERROR_TMP} > /dev/null
     then
         prints ${1} ${2} "Connection refused" "Unknown"  
-        RETCODE=3
+        set_returncode 3
 
     elif ${GREP} -i "No route to host" ${ERROR_TMP} > /dev/null
     then
         prints ${1} ${2} "No route to host" "Unknown"  
-        RETCODE=3
+        set_returncode 3
 
     elif ${GREP} -i "gethostbyname failure" ${ERROR_TMP} > /dev/null
     then
         prints ${1} ${2} "Cannot resolve domain" "Unknown" 
-        RETCODE=3
+        set_returncode 3
     
     elif ${GREP} -i "Operation timed out" ${ERROR_TMP} > /dev/null
     then
         prints ${1} ${2} "Operation timed out" "Unknown"  
-        RETCODE=3
+        set_returncode 3
  
     elif ${GREP} -i "ssl handshake failure" ${ERROR_TMP} > /dev/null
     then
         prints ${1} ${2} "SSL handshake failed" "Unknown"  
-        RETCODE=3
+        set_returncode 3
 
     elif ${GREP} -i "connect: Connection timed out" ${ERROR_TMP} > /dev/null
     then
         prints ${1} ${2} "Connection timed out" "Unknown"  
-        RETCODE=3
+        set_returncode 3
     
     else
         check_file_status ${CERT_TMP} $1 $2
@@ -544,7 +561,7 @@ check_file_status() {
     then
         echo "ERROR: The file named ${CERTFILE} is unreadable or doesn't exist"
         echo "ERROR: Please check to make sure the certificate for ${HOST}:${PORT} is valid"
-        RETCODE=1
+        set_returncode 3
         return
     fi
 
@@ -608,7 +625,7 @@ check_file_status() {
         fi
 
         prints ${HOST} ${PORT} "Expired" "${CERTDATE}" "${CERTDIFF}" "${CERTISSUER}" "${COMMONNAME}" "${SERIAL}"
-        RETCODE=2
+        RETCODE_LOCAL=2
 
     elif [ ${CERTDIFF} -lt ${WARNDAYS} ]
     then
@@ -618,12 +635,14 @@ check_file_status() {
                  | ${MAIL} -s "Certificate for ${HOST} \"(CN: ${COMMONNAME})\" will expire in ${WARNDAYS}-days or less" ${ADMIN}
         fi
         prints ${HOST} ${PORT} "Expiring" "${CERTDATE}" "${CERTDIFF}" "${CERTISSUER}" "${COMMONNAME}" "${SERIAL}" 
-        RETCODE=1
+        RETCODE_LOCAL=1
 
     else
         prints ${HOST} ${PORT} "Valid" "${CERTDATE}" "${CERTDIFF}" "${CERTISSUER}" "${COMMONNAME}" "${SERIAL}"
-        RETCODE=0
+        RETCODE_LOCAL=0
     fi
+    
+    set_returncode ${RETCODE_LOCAL}
 }
 
 #################################
@@ -743,8 +762,13 @@ then
 elif [ -f "${SERVERFILE}" ]
 then
     print_heading
-    egrep -v '(^#|^$)' ${SERVERFILE} |  while read HOST PORT
+    
+    IFS=$'\n'
+    for LINE in `egrep -v '(^#|^$)' ${SERVERFILE}`
     do
+        HOST=${LINE%% *}
+        PORT=${LINE#* }
+        IFS=" "
         if [ "$PORT" = "FILE" ]
         then
             check_file_status ${HOST} "FILE" "${HOST}"
@@ -752,6 +776,7 @@ then
             check_server_status "${HOST}" "${PORT}"
         fi
     done
+    IFS=${OLDIFS}
 
 ### Check to see if the certificate in CERTFILE is about to expire
 elif [ "${CERTFILE}" != "" ]
