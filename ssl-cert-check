@@ -16,6 +16,7 @@
 #  - Use highest returncode for Nagios output -- Marcel Pennewiss
 #  - Set RETCODE to 3 (unknown) if a certificate file does not exist -- Marcel Pennewiss
 #  - Add a "-d" option to specify a directory or file mask pattern -- Marcel Pennewiss
+#  - Add a "-N" option to create summarized Nagios output -- Marcel Pennewiss
 #
 # Version 3.29
 #  - Add the openssl -servername flag if it shows up in help.
@@ -231,6 +232,9 @@ ALARM="FALSE"
 # Don't run as a Nagios plugin by default (cmdline: -n)
 NAGIOS="FALSE"
 
+# Don't summarize Nagios output by default (cmdline: -N)
+NAGIOSSUMMARY="FALSE"
+
 # NULL out the PKCSDBPASSWD variable for later use (cmdline: -k)
 PKCSDBPASSWD=""
 
@@ -275,6 +279,15 @@ fi
 
 # Return code used by nagios. Initialize to 0.
 RETCODE=0
+
+# Certificate counters and minimum difference. Initialize to 0.
+SUMMARY_VALID=0
+SUMMARY_WILL_EXPIRE=0
+SUMMARY_EXPIRED=0
+SUMMARY_MIN_DIFF=0
+SUMMARY_MIN_DATE=
+SUMMARY_MIN_HOST=
+SUMMARY_MIN_PORT=
 
 # Set the default umask to be somewhat restrictive
 umask 077
@@ -362,7 +375,12 @@ date_diff()
 #####################################################################
 prints() 
 {
-    if [ "${QUIET}" != "TRUE" ] && [ "${ISSUER}" = "TRUE" ] && [ "${VALIDATION}" != "TRUE" ]
+    if [ "${NAGIOSSUMMARY}" == "TRUE" ]
+    then
+        return
+    fi
+
+    if [ "${QUIET}" != "TRUE" ] && [ "${ISSUER}" = "TRUE" ] && [ "${VALIDATION}" != "TRUE" ] 
     then
         MIN_DATE=$(echo $4 | ${AWK} '{ print $1, $2, $4 }')
         if [ "${NAGIOS}" == "TRUE" ]
@@ -423,6 +441,33 @@ print_heading()
     fi
 }
 
+####################################################
+# Purpose: Print a summary for nagios
+# Arguments:
+#   None
+####################################################
+print_summary() 
+{
+    if [ "${NAGIOSSUMMARY}" != "TRUE" ]
+    then
+        return
+    fi
+
+    if [ ${SUMMARY_WILL_EXPIRE} -eq 0 ] && [ ${SUMMARY_EXPIRED} -eq 0 ]
+    then
+        ${PRINTF} "%s valid certificate(s)|days=%s\n" "${SUMMARY_VALID}" "${SUMMARY_MIN_DIFF}"
+
+    elif [ ${SUMMARY_EXPIRED} -ne 0 ]
+    then
+        ${PRINTF} "%s certificate(s) expired (%s:%s on %s)|days=%s\n" "${SUMMARY_EXPIRED}" "${SUMMARY_MIN_HOST}" "${SUMMARY_MIN_PORT}" "${SUMMARY_MIN_DATE}" "${SUMMARY_MIN_DIFF}"
+      
+    elif [ ${SUMMARY_WILL_EXPIRE} -ne 0 ]
+    then
+        ${PRINTF} "%s certificate(s) will expire (%s:%s on %s)|days=%s\n" "${SUMMARY_WILL_EXPIRE}" "${SUMMARY_MIN_HOST}" "${SUMMARY_MIN_PORT}" "${SUMMARY_MIN_DATE}" "${SUMMARY_MIN_DIFF}"
+
+    fi
+}
+
 #############################################################
 # Purpose: Set returncode to value if current value is lower
 # Arguments:
@@ -436,6 +481,38 @@ set_returncode()
     fi
 }
 
+########################################################################
+# Purpose: Set certificate counters and informations for nagios summary
+# Arguments:
+#   $1 -> Status of certificate (0: valid, 1: will expire, 2: expired)
+#   $2 -> Hostname
+#   $3 -> TCP Port 
+#   $4 -> Date when certificate will expire
+#   $5 -> Days left until the certificate will expire 
+########################################################################
+set_summary()
+{
+    if [ ${1} -eq 0 ]
+    then
+        SUMMARY_VALID=$((SUMMARY_VALID+1))
+
+    elif [ ${1} -eq 1 ]
+    then
+        SUMMARY_WILL_EXPIRE=$((SUMMARY_WILL_EXPIRE+1))
+
+    else
+        SUMMARY_EXPIRED=$((SUMMARY_EXPIRED+1))
+    fi
+
+    if [ ${5} -lt ${SUMMARY_MIN_DIFF} ] || [ ${SUMMARY_MIN_DIFF} -eq 0 ]
+    then
+        SUMMARY_MIN_DATE=${4}
+        SUMMARY_MIN_DIFF=${5}
+        SUMMARY_MIN_HOST=${2}
+        SUMMARY_MIN_PORT=${3}
+    fi
+}
+
 ##########################################
 # Purpose: Describe how the script works
 # Arguments:
@@ -443,8 +520,8 @@ set_returncode()
 ##########################################
 usage() 
 {
-    echo "Usage: $0 [ -e email address ] [ -x days ] [-q] [-a] [-b] [-h] [-i] [-n] [-v]"
-    echo "       { [ -s common_name ] && [ -p port] } || { [ -f cert_file ] } || { [ -c cert file ] } || { [ -d cert dir ] }"
+    echo "Usage: $0 [ -e email address ] [ -x days ] [-q] [-a] [-b] [-h] [-i] [-n] [-N] [-v]"
+    echo "       { [ -s common_name ] && [ -p port] } || { [ -f cert_file ] } || { [ -c cert file ] } || { [ -d cert dir ] }" 
     echo ""
     echo "  -a                : Send a warning message through E-mail"
     echo "  -b                : Will not print header"
@@ -456,6 +533,7 @@ usage()
     echo "  -i                : Print the issuer of the certificate"
     echo "  -k password       : PKCS12 file password"
     echo "  -n                : Run as a Nagios plugin"
+    echo "  -N                : Run as a Nagios plugin and output one line summary (implies -n, requires -f or -d)"
     echo "  -p port           : Port to connect to (interactive mode)"
     echo "  -s commmon name   : Server to connect to (interactive mode)"
     echo "  -t type           : Specify the certificate type"
@@ -646,12 +724,14 @@ check_file_status() {
     fi
     
     set_returncode ${RETCODE_LOCAL}
+    MIN_DATE=$(echo ${CERTDATE} | ${AWK} '{ print $1, $2, $4 }')
+    set_summary ${RETCODE_LOCAL} ${HOST} ${PORT} "${MIN_DATE}" ${CERTDIFF}
 }
 
 #################################
 ### Start of main program
 #################################
-while getopts abinv:e:f:c:d:hk:p:s:t:qx:V option
+while getopts abinNv:e:f:c:d:hk:p:s:t:qx:V option
 do
     case "${option}"
     in
@@ -666,6 +746,8 @@ do
         i) ISSUER="TRUE";;
         k) PKCSDBPASSWD=${OPTARG};;
         n) NAGIOS="TRUE";;
+        N) NAGIOS="TRUE"
+           NAGIOSSUMMARY="TRUE";;
         p) PORT=$OPTARG;;
         s) HOST=$OPTARG;;
         t) CERTTYPE=$OPTARG;;
@@ -759,6 +841,7 @@ if [ "${HOST}" != "" ] && [ "${PORT}" != "" ]
 then
     print_heading
     check_server_status "${HOST}" "${PORT}"
+    print_summary
 
 ### If a file is passed to the "-f" option on the command line, check 
 ### each certificate or server / port combination in the file to see if 
@@ -781,12 +864,14 @@ then
         fi
     done
     IFS=${OLDIFS}
+    print_summary
 
 ### Check to see if the certificate in CERTFILE is about to expire
 elif [ "${CERTFILE}" != "" ]
 then
     print_heading
     check_file_status ${CERTFILE} "FILE"  "${CERTFILE}"
+    print_summary
 
 ### Check to see if the certificates in CERTDIRECTORY are about to expire
 elif [ "${CERTDIRECTORY}" != "" ] && (${FIND} -L ${CERTDIRECTORY} -type f > /dev/null 2>&1)
@@ -795,6 +880,7 @@ then
     for FILE in `${FIND} -L ${CERTDIRECTORY} -type f`; do
         check_file_status ${FILE} "FILE" "${FILE}"
     done
+    print_summary
 
 ### There was an error, so print a detailed usage message and exit
 else
