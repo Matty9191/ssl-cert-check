@@ -8,9 +8,12 @@
 #
 # Author: Matty < matty91 at gmail dot com >
 #
-# Current Version: 3.29
+# Current Version: 3.30
 #
 # Revision History:
+#
+# Version 3.30
+#  - Added option -S for Splunk support.
 #
 # Version 3.29
 #  - Add the openssl -servername flag if it shows up in help.
@@ -166,7 +169,7 @@
 #  Version 1.0
 #      Initial Release
 #
-# Last Updated: 01-05-2016
+# Last Updated: 02-NOV-2016
 #
 # Purpose: 
 #  ssl-cert-check checks to see if a digital certificate in X.509 format
@@ -197,7 +200,7 @@
 #  -- OpenBSD using /bin/sh
 #  -- FreeBSD using /bin/sh
 #  -- Centos Linux 3, 4, 5 & 6 using /bin/bash
-#  -- Redhat Enterprise Linux 3, 4, 5 & 6 using /bin/bash
+#  -- Redhat Enterprise Linux 3, 4, 5, 6 & 7 using /bin/bash
 # 
 # Usage:
 #  Refer to the usage() sub-routine, or invoke ssl-cert-check 
@@ -224,6 +227,9 @@ ALARM="FALSE"
 
 # Don't run as a Nagios plugin by default (cmdline: -n)
 NAGIOS="FALSE"
+
+# Don't use Splunk friendly output by default (cmdline: -S)
+SPLUNK="FALSE"
 
 # NULL out the PKCSDBPASSWD variable for later use (cmdline: -k)
 PKCSDBPASSWD=""
@@ -400,6 +406,11 @@ prints()
         if [ "${NAGIOS}" == "TRUE" ]
         then
             ${PRINTF} "%-35s %-17s %-8s %-11s %-4s %-30s\n" "$1:$2" "$6" "$3" "$MIN_DATE" \|days="$5" 
+        elif [ "${SPLUNK}" == "TRUE" ]
+        then
+            TIMESTAMP=`date +\%Y-\%m-\%d\ \%H:\%M:\%S`
+            HNAME=$(echo $1 | ${AWK} -F. '{ print $1 }')
+            ${PRINTF} "%s hostname=\"%s\" fqdn=\"%s\" port=\"%s\" issuer=\"%s\" status=\"%s\" expires=\"%s\" days=\"%s\"\n" "$TIMESTAMP" "$HNAME" "$1" "$2" "$6" "$3" "$MIN_DATE" "$5" 
         else
             ${PRINTF} "%-35s %-17s %-8s %-11s %-4s %-30s\n" "$1:$2" "$6" "$3" "$MIN_DATE" "$5" 
         fi
@@ -413,6 +424,11 @@ prints()
         if [ "${NAGIOS}" == "TRUE" ]
         then
             ${PRINTF} "%-47s %-12s %-12s %-4s %-30s\n" "$1:$2" "$3" "$MIN_DATE" \|days="$5" 
+        elif [ "${SPLUNK}" == "TRUE" ]
+        then
+            TIMESTAMP=`date +\%Y-\%m-\%d\ \%H:\%M:\%S`
+            HNAME=$(echo $1 | ${AWK} -F. '{ print $1 }')
+            ${PRINTF} "%s hostname=\"%s\" fqdn=\"%s\" port=\"%s\" status=\"%s\" expires=\"%s\" days=\"%s\"\n" "$TIMESTAMP" "$HNAME" "$1" "$2" "$3" "$MIN_DATE" "$5" 
         else
             ${PRINTF} "%-47s %-12s %-12s %-4s %-30s\n" "$1:$2" "$3" "$MIN_DATE" "$5" 
         fi  
@@ -432,22 +448,21 @@ print_heading()
 {
     if [ "${NOHEADER}" != "TRUE" ]
     then 
-       if [ "${QUIET}" != "TRUE" ] && [ "${ISSUER}" = "TRUE" ] && [ "${NAGIOS}" != "TRUE" ] && [ "${VALIDATION}" != "TRUE" ]
+       if [ "${QUIET}" != "TRUE" ] && [ "${ISSUER}" = "TRUE" ] && [ "${NAGIOS}" != "TRUE" ] && [ "${SPLUNK}" != "TRUE" ] && [ "${VALIDATION}" != "TRUE" ]
        then
            ${PRINTF} "\n%-35s %-17s %-8s %-11s %-4s\n" "Host" "Issuer" "Status" "Expires" "Days"
            echo "----------------------------------- ----------------- -------- ----------- ----"
-
-       elif [ "${QUIET}" != "TRUE" ] && [ "${ISSUER}" = "TRUE" ] && [ "${NAGIOS}" != "TRUE" ] && [ "${VALIDATION}" == "TRUE" ]
+       elif [ "${QUIET}" != "TRUE" ] && [ "${ISSUER}" = "TRUE" ] && [ "${NAGIOS}" != "TRUE" ] && [ "${SPLUNK}" != "TRUE" ] && [ "${VALIDATION}" == "TRUE" ]
        then
            ${PRINTF} "\n%-35s %-35s %-32s %-17s\n" "Host" "Common Name" "Serial #" "Issuer"
            echo "----------------------------------- ----------------------------------- -------------------------------- -----------------"
     
-       elif [ "${QUIET}" != "TRUE" ] && [ "${NAGIOS}" != "TRUE" ] && [ "${VALIDATION}" != "TRUE" ]
+       elif [ "${QUIET}" != "TRUE" ] && [ "${NAGIOS}" != "TRUE" ] && [ "${SPLUNK}" != "TRUE" ] && [ "${VALIDATION}" != "TRUE" ]
        then
            ${PRINTF} "\n%-47s %-12s %-12s %-4s\n" "Host" "Status" "Expires" "Days" 
            echo "----------------------------------------------- ------------ ------------ ----"
     
-       elif [ "${QUIET}" != "TRUE" ] && [ "${NAGIOS}" != "TRUE" ] && [ "${VALIDATION}" == "TRUE" ]
+       elif [ "${QUIET}" != "TRUE" ] && [ "${NAGIOS}" != "TRUE" ] && [ "${SPLUNK}" != "TRUE" ] && [ "${VALIDATION}" == "TRUE" ]
        then
            ${PRINTF} "\n%-35s %-35s %-32s\n" "Host" "Common Name" "Serial #"
            echo "----------------------------------- ----------------------------------- --------------------------------"
@@ -463,7 +478,7 @@ print_heading()
 ##########################################
 usage() 
 {
-    echo "Usage: $0 [ -e email address ] [ -x days ] [-q] [-a] [-b] [-h] [-i] [-n] [-v]"
+    echo "Usage: $0 [ -e email address ] [ -x days ] [-q] [-a] [-b] [-h] [-i] [-n] [-S] [-v]"
     echo "       { [ -s common_name ] && [ -p port] } || { [ -f cert_file ] } || { [ -c certificate file ] }" 
     echo ""
     echo "  -a                : Send a warning message through E-mail"
@@ -477,6 +492,7 @@ usage()
     echo "  -n                : Run as a Nagios plugin"
     echo "  -p port           : Port to connect to (interactive mode)"
     echo "  -s commmon name   : Server to connect to (interactive mode)"
+    echo "  -S                : Splunk friendly output"
     echo "  -t type           : Specify the certificate type"
     echo "  -q                : Don't print anything on the console"
     echo "  -v                : Specify a specific protocol version to use (tls, ssl2, ssl3)"
@@ -668,7 +684,7 @@ check_file_status() {
 #################################
 ### Start of main program
 #################################
-while getopts abinv:e:f:c:hk:p:s:t:qx:V option
+while getopts abinSv:e:f:c:hk:p:s:t:qx:V option
 do
     case "${option}"
     in
@@ -684,6 +700,7 @@ do
         n) NAGIOS="TRUE";;
         p) PORT=$OPTARG;;
         s) HOST=$OPTARG;;
+        S) SPLUNK="TRUE";;
         t) CERTTYPE=$OPTARG;;
         q) QUIET="TRUE";;
         v) VERSION=$OPTARG;;
