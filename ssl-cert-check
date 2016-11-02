@@ -169,7 +169,7 @@
 #  Version 1.0
 #      Initial Release
 #
-# Last Updated: 01-05-2016
+# Last Updated: 02-NOV-2016
 #
 # Purpose: 
 #  ssl-cert-check checks to see if a digital certificate in X.509 format
@@ -200,7 +200,7 @@
 #  -- OpenBSD using /bin/sh
 #  -- FreeBSD using /bin/sh
 #  -- Centos Linux 3, 4, 5 & 6 using /bin/bash
-#  -- Redhat Enterprise Linux 3, 4, 5,6 & 7 using /bin/bash
+#  -- Redhat Enterprise Linux 3, 4, 5, 6 & 7 using /bin/bash
 # 
 # Usage:
 #  Refer to the usage() sub-routine, or invoke ssl-cert-check 
