@@ -19,6 +19,7 @@ Usage: ./ssl-cert-check [ -e email address ] [ -x days ] [-q] [-a] [-b] [-h] [-i
   -n                : Run as a Nagios plugin
   -p port           : Port to connect to (interactive mode)
   -s commmon name   : Server to connect to (interactive mode)
+  -S                : Splunk friendly output
   -t type           : Specify the certificate type
   -q                : Don't print anything on the console
   -v                : Specify a specific protocol version to use (tls, ssl2, ssl3)
