@@ -5,7 +5,7 @@ ssl-cert-check is a Bourne shell script that can be used to report on expiring S
 # Usage:
 <pre>
 $ ./ssl-cert-check
-Usage: ./ssl-cert-check [ -e email address ] [ -x days ] [-q] [-a] [-b] [-h] [-i] [-n] [-v]
+Usage: ./ssl-cert-check [ -e email address ] [ -E sender email address ] [ -x days ] [-q] [-a] [-b] [-h] [-i] [-n] [-v]
        { [ -s common_name ] && [ -p port] } || { [ -f cert_file ] } || { [ -c certificate file ] }
 
   -a                : Send a warning message through E-mail
