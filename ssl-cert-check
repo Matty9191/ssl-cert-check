@@ -19,6 +19,9 @@
 #  - Add a "-N" option to create summarized Nagios output -- Marcel Pennewiss
 #  - Cleaned up many formatting -- Marcel Pennewiss
 #
+# Versione 3.29a
+#  - Added option to specify email sender address
+#
 # Version 3.29
 #  - Add the openssl -servername flag if it shows up in help.
 #
@@ -173,7 +176,7 @@
 #  Version 1.0
 #      Initial Release
 #
-# Last Updated: 20-10-2016
+# Last Updated: 12-12-2016
 #
 # Purpose:
 #  ssl-cert-check checks to see if a digital certificate in X.509 format
@@ -221,6 +224,9 @@ export PATH
 # Who to page when an expired certificate is detected (cmdline: -e)
 ADMIN="root"
 
+# Email sender address for alarm notifications
+SENDER="postmaster@localhost.localdomain"
+
 # Number of days in the warning threshhold (cmdline: -x)
 WARNDAYS=30
 
@@ -262,20 +268,30 @@ FIND=$(which find)
 if [ -f /usr/bin/mailx ]
 then
     MAIL="/usr/bin/mailx"
+    MAILMODE="mailx"
 elif [ -f /bin/mail ]
 then
     MAIL="/bin/mail"
+    MAILMODE="mail"
 elif [ -f /usr/bin/mail ]
 then
     MAIL="/usr/bin/mail"
+    MAILMODE="mail"
 elif [ -f /sbin/mail ]
 then
     MAIL="/sbin/mail"
+    MAILMODE="mail"
 elif [ -f /usr/sbin/mail ]
 then
     MAIL="/usr/sbin/mail"
+    MAILMODE="mail"
+elif [ -f /usr/sbin/sendmail ]
+then
+    MAIL="/usr/sbin/sendmail"
+    MAILMODE="sendmail"    
 else
     MAIL="cantfindit"
+    MAILMODE="cantfindit"
 fi
 
 # Return code used by nagios. Initialize to 0.
@@ -292,6 +308,37 @@ SUMMARY_MIN_PORT=
 
 # Set the default umask to be somewhat restrictive
 umask 077
+
+
+#####################################################
+### Send email
+### Accepts three parameters:
+###  $1 -> sender email address
+###  $2 -> email to send mail
+###  $3 -> Subject
+###  $4 -> Message
+#####################################################
+send_mail() {
+
+    FROM=${1}
+    TO=${2}
+    SUBJECT=${3}
+    MSG=${4}
+
+    case "${MAILMODE}" in
+        "mail" | "mailx")
+            echo "$MSG" | ${MAIL} -r $FROM -s "$SUBJECT" $TO
+            ;;
+        "sendmail")
+            echo "Subject:$SUBJECT"$'\n'"$MSG" | ${MAIL} -t $TO -- -f $FROM
+            ;;
+        "*")
+            echo "ERROR: You enabled automated alerts, but the mail binary could not be found."
+            echo "FIX: Please modify the ${MAIL} and ${$MAILMODE} variable in the program header."
+            exit 1
+            ;;
+    esac
+}
 
 #############################################################################
 # Purpose: Convert a date from MONTH-DAY-YEAR to Julian format
@@ -521,7 +568,7 @@ set_summary()
 ##########################################
 usage()
 {
-    echo "Usage: $0 [ -e email address ] [ -x days ] [-q] [-a] [-b] [-h] [-i] [-n] [-N] [-v]"
+    echo "Usage: $0 [ -e email address ] [-E sender email address] [ -x days ] [-q] [-a] [-b] [-h] [-i] [-n] [-N] [-v]"
     echo "       { [ -s common_name ] && [ -p port] } || { [ -f cert_file ] } || { [ -c cert file ] } || { [ -d cert dir ] }"
     echo ""
     echo "  -a                : Send a warning message through E-mail"
@@ -529,6 +576,7 @@ usage()
     echo "  -c cert file      : Print the expiration date for the PEM or PKCS12 formatted certificate in cert file"
     echo "  -d cert directory : Print the expiration date for the PEM or PKCS12 formatted certificates in cert directory"
     echo "  -e E-mail address : E-mail address to send expiration notices"
+    echo "  -E E-mail sender  : E-mail address of the sender"
     echo "  -f cert file      : File with a list of FQDNs and ports"
     echo "  -h                : Print this screen"
     echo "  -i                : Print the issuer of the certificate"
@@ -703,8 +751,8 @@ check_file_status() {
     then
         if [ "${ALARM}" = "TRUE" ]
         then
-            echo "The SSL certificate for ${HOST} \"(CN: ${COMMONNAME})\" has expired!" \
-                 | ${MAIL} -s "Certificate for ${HOST} \"(CN: ${COMMONNAME})\" has expired!" ${ADMIN}
+            send_mail ${SENDER} ${ADMIN} "Certificate for ${HOST} \"(CN: ${COMMONNAME})\" has expired!" \
+                "The SSL certificate for ${HOST} \"(CN: ${COMMONNAME})\" has expired!"
         fi
 
         prints ${HOST} ${PORT} "Expired" "${CERTDATE}" "${CERTDIFF}" "${CERTISSUER}" "${COMMONNAME}" "${SERIAL}"
@@ -714,8 +762,8 @@ check_file_status() {
     then
         if [ "${ALARM}" = "TRUE" ]
         then
-            echo "The SSL certificate for ${HOST} \"(CN: ${COMMONNAME})\" will expire on ${CERTDATE}" \
-                 | ${MAIL} -s "Certificate for ${HOST} \"(CN: ${COMMONNAME})\" will expire in ${WARNDAYS}-days or less" ${ADMIN}
+            send_mail ${SENDER} ${ADMIN} "Certificate for ${HOST} \"(CN: ${COMMONNAME})\" will expire in ${WARNDAYS}-days or less" \
+                "The SSL certificate for ${HOST} \"(CN: ${COMMONNAME})\" will expire on ${CERTDATE}"
         fi
         prints ${HOST} ${PORT} "Expiring" "${CERTDATE}" "${CERTDIFF}" "${CERTISSUER}" "${COMMONNAME}" "${SERIAL}"
         RETCODE_LOCAL=1
@@ -733,7 +781,7 @@ check_file_status() {
 #################################
 ### Start of main program
 #################################
-while getopts abinNv:e:f:c:d:hk:p:s:t:qx:V option
+while getopts abinNv:e:E:f:c:d:hk:p:s:t:qx:V option
 do
     case "${option}"
     in
@@ -742,6 +790,7 @@ do
         c) CERTFILE=${OPTARG};;
         d) CERTDIRECTORY=${OPTARG};;
         e) ADMIN=${OPTARG};;
+	E) SENDER=${OPTARG};;
         f) SERVERFILE=$OPTARG;;
         h) usage
            exit 1;;
