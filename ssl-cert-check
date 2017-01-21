@@ -330,7 +330,7 @@ send_mail() {
             echo "$MSG" | ${MAIL} -r $FROM -s "$SUBJECT" $TO
             ;;
         "sendmail")
-            echo "Subject:$SUBJECT"$'\n'"$MSG" | ${MAIL} -t $TO -- -f $FROM
+            (echo "Subject:$SUBJECT" && echo "TO:$TO" && echo "FROM:$FROM" && echo "$MSG") | ${MAIL} $TO
             ;;
         "*")
             echo "ERROR: You enabled automated alerts, but the mail binary could not be found."
