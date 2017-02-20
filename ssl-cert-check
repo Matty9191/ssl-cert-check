@@ -12,6 +12,9 @@
 #
 # Revision History:
 #
+# Version 3.31
+#  - Add support for bsd-mailx -- Chad Sheets
+#
 # Version 3.30
 #  - Use highest returncode for Nagios output -- Marcel Pennewiss
 #  - Set RETCODE to 3 (unknown) if a certificate file does not exist -- Marcel Pennewiss
@@ -265,7 +268,11 @@ MKTEMP=$(which mktemp)
 FIND=$(which find)
 
 # Try to find a mail client
-if [ -f /usr/bin/mailx ]
+if [ $(readlink -e $(which mailx) | grep "bsd") ]
+then
+    MAIL=$(which mailx)
+    MAILMODE="bsd-mailx"
+elif [ -f /usr/bin/mailx ]
 then
     MAIL="/usr/bin/mailx"
     MAILMODE="mailx"
@@ -328,6 +335,9 @@ send_mail() {
     case "${MAILMODE}" in
         "mail" | "mailx")
             echo "$MSG" | ${MAIL} -r $FROM -s "$SUBJECT" $TO
+            ;;
+        "bsd-mailx")
+            echo "$MSG" | ${MAIL} -s "$SUBJECT" $TO
             ;;
         "sendmail")
             (echo "Subject:$SUBJECT" && echo "TO:$TO" && echo "FROM:$FROM" && echo "$MSG") | ${MAIL} $TO
