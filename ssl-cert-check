@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # Program: SSL Certificate Check <ssl-cert-check>
 #
