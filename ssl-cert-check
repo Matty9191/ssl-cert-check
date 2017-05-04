@@ -636,7 +636,7 @@ check_server_status() {
          TLSFLAG="${TLSFLAG} -servername $1"
     fi
 
-    echo "" | ${OPENSSL} s_client ${VER} -connect ${1}:${2} ${TLSFLAG} 2> ${ERROR_TMP} 1> ${CERT_TMP}
+    echo "" | ${OPENSSL} s_client -crlf ${VER} -connect ${1}:${2} ${TLSFLAG} 2> ${ERROR_TMP} 1> ${CERT_TMP}
 
     if ${GREP} -i "Connection refused" ${ERROR_TMP} > /dev/null
     then
