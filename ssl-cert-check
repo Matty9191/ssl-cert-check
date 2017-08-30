@@ -12,6 +12,9 @@
 #
 # Revision History:
 #
+# Version 3.31
+#   - Add support for connecting to XMPP servers -- Simon Dellenbach
+#
 # Version 3.30
 #  - Use highest returncode for Nagios output -- Marcel Pennewiss
 #  - Set RETCODE to 3 (unknown) if a certificate file does not exist -- Marcel Pennewiss
@@ -622,6 +625,10 @@ check_server_status() {
     elif [ "_${2}" = "_submission" -o "_${2}" = "_587" ]
     then
         TLSFLAG="-starttls smtp -port ${2}"
+
+    elif [ "_${2}" = "_xmpp" -o "_${2}" = "_5222" ]
+    then
+        TLSFLAG="-starttls xmpp"
     else
         TLSFLAG=""
     fi
