@@ -12,6 +12,9 @@
 #
 # Revision History:
 #
+# Version 3.31
+#  - Fixed the test for the -servername flag -- Kitson Consulting.
+#
 # Version 3.30
 #  - Use highest returncode for Nagios output -- Marcel Pennewiss
 #  - Set RETCODE to 3 (unknown) if a certificate file does not exist -- Marcel Pennewiss
@@ -860,7 +863,7 @@ then
 fi
 
 # Send along the servername when TLS is used
-if ${OPENSSL} s_client -h 2>&1 | grep '-servername' > /dev/null
+if ${OPENSSL} s_client -help 2>&1 | grep '-servername' > /dev/null
 then
     TLSSERVERNAME="TRUE"
 else
