@@ -928,8 +928,8 @@ then
 elif [ "${CERTDIRECTORY}" != "" ] && (${FIND} -L ${CERTDIRECTORY} -type f > /dev/null 2>&1)
 then
     print_heading
-    for FILE in `${FIND} -L ${CERTDIRECTORY} -type f`; do
-        check_file_status ${FILE} "FILE" "${FILE}"
+    $FIND -L ${CERTDIRECTORY} -type f -print0 | while read -d $'\0' FILE; do
+        check_file_status "${FILE}" "FILE" "`basename \"${FILE}\"`"
     done
     print_summary
 
