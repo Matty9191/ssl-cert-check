@@ -265,7 +265,11 @@ MKTEMP=$(which mktemp)
 FIND=$(which find)
 
 # Try to find a mail client
-if [ -f /usr/bin/mailx ]
+if [ -f /usr/bin/bsd-mailx ]
+then
+    MAIL="/usr/bin/bsd-mailx"
+    MAILMODE="bsd-mailx"
+elif [ -f /usr/bin/mailx ]
 then
     MAIL="/usr/bin/mailx"
     MAILMODE="mailx"
@@ -326,6 +330,9 @@ send_mail() {
     MSG=${4}
 
     case "${MAILMODE}" in
+	"bsd-mailx")
+	    echo "$MSG" | ${MAIL} -s "$SUBJECT" $TO
+            ;; 
         "mail" | "mailx")
             echo "$MSG" | ${MAIL} -r $FROM -s "$SUBJECT" $TO
             ;;
