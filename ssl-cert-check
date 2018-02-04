@@ -268,14 +268,15 @@ MKTEMP=$(which mktemp)
 FIND=$(which find)
 
 # Try to find a mail client
-if [ $(readlink -e $(which mailx) | grep "bsd") ]
-then
-    MAIL=$(which mailx)
-    MAILMODE="bsd-mailx"
-elif [ -f /usr/bin/mailx ]
+if [ -f /usr/bin/mailx ]
 then
     MAIL="/usr/bin/mailx"
-    MAILMODE="mailx"
+    if [[ $(readlink -e $MAIL) =~ "bsd" ]]
+	then
+	    MAILMODE="bsd-mailx"
+	else
+	    MAILMODE="mailx"
+    fi
 elif [ -f /bin/mail ]
 then
     MAIL="/bin/mail"
