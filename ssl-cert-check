@@ -296,7 +296,7 @@ then
 elif [ -f /usr/sbin/sendmail ]
 then
     MAIL="/usr/sbin/sendmail"
-    MAILMODE="sendmail"    
+    MAILMODE="sendmail"
 else
     MAIL="cantfindit"
     MAILMODE="cantfindit"
@@ -685,6 +685,34 @@ check_server_status() {
 }
 
 #####################################################
+### Extract cert info from  x509 certificate file
+### Accepts two parameters:
+###  $1 -> certificate file to process
+###  $2 -> certificate type (PEM|DER)
+#####################################################
+openssl_extract_cert_info() {
+    local CERTFILE=${1}
+    local CERTTYPE=${2}
+
+    # Extract the expiration date from the ceriticate
+    CERTDATE=$(${OPENSSL} x509 -in ${CERTFILE} -enddate -noout -inform ${CERTTYPE} | \
+         ${SED} 's/notAfter\=//')
+
+    # Extract the issuer from the certificate
+    CERTISSUER=$(${OPENSSL} x509 -in ${CERTFILE} -issuer -noout -inform ${CERTTYPE} | \
+           ${AWK} 'BEGIN {RS="/" } $0 ~ /^O=/ { print substr($0,3,17)}')
+
+    ### Grab the common name (CN) from the X.509 certificate
+    COMMONNAME=$(${OPENSSL} x509 -in ${CERTFILE} -subject -noout -inform ${CERTTYPE} | \
+           ${SED} -e 's/.*CN=//' | \
+           ${SED} -e 's/\/.*//')
+
+    ### Grab the serial number from the X.509 certificate
+    SERIAL=$(${OPENSSL} x509 -in ${CERTFILE} -serial -noout -inform ${CERTTYPE} | \
+           ${SED} -e 's/serial=//')
+}
+
+#####################################################
 ### Check the expiration status of a certificate file
 ### Accepts three parameters:
 ###  $1 -> certificate file to process
@@ -731,6 +759,15 @@ check_file_status() {
         ### Grab the serial number from the X.509 certificate
         SERIAL=$(${OPENSSL} x509 -in ${CERT_TMP} -serial -noout | \
                    ${SED} -e 's/serial=//')
+    elif [ ${PORT} = "FILEJKS" ] || [ ${CERTTYPE} = "JKS" ]
+    then
+      # pickup first cert from what we have in keystore
+      JKSALIAS=$(echo "" | keytool -list -keystore ${CERTFILE}  2>/dev/null  | \
+                  ${SED} -e '1,/Your keystore contains/d' -e '/Certificate fingerprint/d' -e 's/,.*//' -e '/^\s*$/d'| \
+                  head -4 | tail -1)
+      JKS_EXPORT_TMP=$($MKTEMP /var/tmp/jks_export.XXXXXX)
+      echo "" | keytool -exportcert -keystore "${CERTFILE}"  -alias "${JKSALIAS}"  -file ${JKS_EXPORT_TMP} 2>/dev/null
+      openssl_extract_cert_info ${JKS_EXPORT_TMP} DER
     else
         # Extract the expiration date from the ceriticate
         CERTDATE=$(${OPENSSL} x509 -in ${CERTFILE} -enddate -noout -inform ${CERTTYPE} | \
@@ -918,9 +955,9 @@ then
         HOST=${LINE%% *}
         PORT=${LINE#* }
         IFS=" "
-        if [ "$PORT" = "FILE" ]
+        if [[ "$PORT" =~ "FILE" ]]
         then
-            check_file_status ${HOST} "FILE" "${HOST}"
+            check_file_status ${HOST} ${PORT} "${HOST}"
         else
             check_server_status "${HOST}" "${PORT}"
         fi
