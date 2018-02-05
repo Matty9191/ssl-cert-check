@@ -434,7 +434,7 @@ date_diff()
     fi
 }
 
-_debug() { if [ ${DEBUG} ] ; then echo "$*" ; fi }
+_debug() { if [ ${DEBUG} -eq 1 ] ; then echo "$*" ; fi }
 
 #####################################################################
 # Purpose: Print a line with the expiraton interval
@@ -800,7 +800,7 @@ check_file_status() {
       for i in CERTDATE CERTISSUER COMMONNAME SERIAL ; do
         GLOBAL_CERT_INFO[${CERT_LIST_KEY};$i]=${!i}
       done
-      if [ $DEBUG ]
+      if [ $DEBUG -eq 1 ]
       then
          echo CERT_LIST_KEY=$CERT_LIST_KEY
          for i in CERTDATE CERTISSUER COMMONNAME SERIAL TYPE MAINFILE TEMPFILE ; do
@@ -834,7 +834,6 @@ check_file_status() {
       	then
           	    GLOBAL_CERT_INFO[${CERT_LIST_KEY};MAINFILE]=${CERTFILE}
       	else
-      	    #echo fake
           	    GLOBAL_CERT_INFO[${CERT_LIST_KEY};TEMPFILE]=${CERTFILE}
       	fi
     fi
@@ -866,7 +865,7 @@ check_file_status() {
     fi
 
     GLOBAL_CERT_INFO[${CERT_LIST_KEY};RETCODE]=${RETCODE_LOCAL}
-    if [ $DEBUG ]
+    if [ $DEBUG -eq 1 ]
     then
        echo CERT_LIST_KEY=$CERT_LIST_KEY
        echo "GLOBAL_CERT_LIST[0]=${GLOBAL_CERT_LIST[0]}"
@@ -883,10 +882,7 @@ check_file_status() {
 process_mail(){
   local MESSAGE=""
   local count_expiring=0
-  if [ $DEBUG ]
-  then
-    echo "Trying send mails"
-  fi
+    _debug "Trying send mails"
   if [ "${ALARM}" = "TRUE" ]
   then
     _debug "ALARM=TRUE"
