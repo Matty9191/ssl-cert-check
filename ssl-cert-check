@@ -262,7 +262,7 @@ CERTTYPE="pem"
 VERSION=""
 
 # Enable debugging
-DEBUG=1
+DEBUG=0
 
 # Location of system binaries
 AWK=$(which awk)
