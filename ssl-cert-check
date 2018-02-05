@@ -14,6 +14,7 @@
 #
 # Version 3.31a
 #  - Add support of JKS keystore -- Stanislav Davydov
+#  - support to send just one aggregated mail -- Stanislav Davydov
 #
 # Version 3.31
 #  - Add support for bsd-mailx -- Chad Sheets
@@ -241,6 +242,9 @@ QUIET="FALSE"
 
 # Don't send E-mail by default (cmdline: -a)
 ALARM="FALSE"
+
+# send separate mail by defaults
+AGGREGATE_MAIL=0
 
 # Don't run as a Nagios plugin by default (cmdline: -n)
 NAGIOS="FALSE"
@@ -877,6 +881,8 @@ check_file_status() {
 
 ### process all GLOBAL_CERT_INFO and send mail if needed
 process_mail(){
+  local MESSAGE=""
+  local count_expiring=0
   if [ $DEBUG ]
   then
     echo "Trying send mails"
@@ -885,34 +891,56 @@ process_mail(){
   then
     _debug "ALARM=TRUE"
     _debug "${#GLOBAL_CERT_LIST[*]} : ${GLOBAL_CERT_LIST[0]}"
-   for i in "${GLOBAL_CERT_LIST}" ; do
-    _debug "\"$i\" ;  ${GLOBAL_CERT_INFO[${i};RETCODE]}"
-    case ${GLOBAL_CERT_INFO[${i};RETCODE]}
-      in
-      2) send_mail ${SENDER} ${ADMIN} "Certificate for ${HOST} \"(CN: ${COMMONNAME})\" has expired!" \
-                "The SSL certificate for ${i} \"(CN: ${COMMONNAME})\" has expired!"
-                ;;
-      1)  send_mail ${SENDER} ${ADMIN} "Certificate for ${HOST} \"(CN: ${COMMONNAME})\" will expire in ${WARNDAYS}-days or less" \
-                "The SSL certificate for ${i} \"(CN: ${COMMONNAME})\" will expire on ${CERTDATE}"
-                ;;
-    esac
-   done
+    if [ $AGGREGATE_MAIL -eq 1 ]
+    then
+      for i in "${GLOBAL_CERT_LIST[@]}" ; do
+       _debug "\"$i\" ;  ${GLOBAL_CERT_INFO[${i};RETCODE]}"
+       case ${GLOBAL_CERT_INFO[${i};RETCODE]}
+         in
+         2) MESSAGE="${MESSAGE}The SSL certificate for ${i} \"(CN: ${COMMONNAME})\" has expired!"$'\n'
+            count_expiring=$(($count_expiring+1))
+                   ;;
+         1)  MESSAGE="${MESSAGE}The SSL certificate for ${i} \"(CN: ${COMMONNAME})\" will expire on ${CERTDATE}"$'\n'
+         count_expiring=$(($count_expiring+1))
+                   ;;
+       esac
+      done
+      if [ $count_expiring -gt 0 ]
+      then
+        _debug "${MESSAGE}"
+        send_mail ${SENDER} ${ADMIN} "Certificates will expire in ${WARNDAYS}-days or less" "${MESSAGE}"
+      fi
+    else
+       for i in "${GLOBAL_CERT_LIST}" ; do
+        _debug "\"$i\" ;  ${GLOBAL_CERT_INFO[${i};RETCODE]}"
+        case ${GLOBAL_CERT_INFO[${i};RETCODE]}
+          in
+          2) send_mail ${SENDER} ${ADMIN} "Certificate for ${HOST} \"(CN: ${COMMONNAME})\" has expired!" \
+                    "The SSL certificate for ${i} \"(CN: ${COMMONNAME})\" has expired!"
+                    ;;
+          1)  send_mail ${SENDER} ${ADMIN} "Certificate for ${HOST} \"(CN: ${COMMONNAME})\" will expire in ${WARNDAYS}-days or less" \
+                    "The SSL certificate for ${i} \"(CN: ${COMMONNAME})\" will expire on ${CERTDATE}"
+                    ;;
+        esac
+       done
+    fi
   fi
 }
 
 #################################
 ### Start of main program
 #################################
-while getopts abinNv:e:E:f:c:d:hk:p:s:t:qx:V option
+while getopts aAbinNv:e:E:f:c:d:hk:p:s:t:qx:V option
 do
     case "${option}"
     in
         a) ALARM="TRUE";;
+        A) AGGREGATE_MAIL=1;;
         b) NOHEADER="TRUE";;
         c) CERTFILE=${OPTARG};;
         d) CERTDIRECTORY=${OPTARG};;
         e) ADMIN=${OPTARG};;
-	E) SENDER=${OPTARG};;
+	      E) SENDER=${OPTARG};;
         f) SERVERFILE=$OPTARG;;
         h) usage
            exit 1;;
