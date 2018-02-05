@@ -12,6 +12,9 @@
 #
 # Revision History:
 #
+# Version 3.31a
+#  - Add support of JKS keystore -- Stanislav Davydov
+#
 # Version 3.31
 #  - Add support for bsd-mailx -- Chad Sheets
 #
@@ -255,7 +258,7 @@ CERTTYPE="pem"
 VERSION=""
 
 # Enable debugging
-DEBUG=0
+DEBUG=1
 
 # Location of system binaries
 AWK=$(which awk)
@@ -313,6 +316,11 @@ SUMMARY_MIN_DIFF=0
 SUMMARY_MIN_DATE=
 SUMMARY_MIN_HOST=
 SUMMARY_MIN_PORT=
+
+# list of certs to use as key in GLOBAL_CERT_INFO
+declare -a GLOBAL CERT_LIST
+# Associative array for massive cert procession (emulate 2D)
+declare -A GLOBAL_CERT_INFO
 
 # Set the default umask to be somewhat restrictive
 umask 077
@@ -680,7 +688,7 @@ check_server_status() {
         set_returncode 3
 
     else
-        check_file_status ${CERT_TMP} $1 $2
+        check_file_status ${CERT_TMP} $1 $2 "SITE:$1:$2"
     fi
 }
 
@@ -724,6 +732,7 @@ check_file_status() {
     CERTFILE=${1}
     HOST=${2}
     PORT=${3}
+    local CERT_LIST_KEY=${4}  # optional must be  set for online SITE based certificates. Important(!) not(!) set for FILE based (especially JKS)
 
     ### Check to make sure the certificate file exists
     if [ ! -r ${CERTFILE} ] || [ ! -s ${CERTFILE} ]
@@ -759,6 +768,14 @@ check_file_status() {
         ### Grab the serial number from the X.509 certificate
         SERIAL=$(${OPENSSL} x509 -in ${CERT_TMP} -serial -noout | \
                    ${SED} -e 's/serial=//')
+        CERT_LIST_KEY=${CERT_LIST_KEY:-FILE:${CERTFILE}}
+        GLOBAL_CERT_LIST+=(${CERT_LIST_KEY})
+        GLOBAL_CERT_INFO[${CERT_LIST_KEY};TYPE]="PKCS12"
+        GLOBAL_CERT_INFO[${CERT_LIST_KEY};MAINFILE]=${CERTFILE}
+        GLOBAL_CERT_INFO[${CERT_LIST_KEY};TEMPFILE]=${CERT_TMP}
+        for i in CERTDATE CERTISSUER COMMONNAME SERIAL ; do
+          GLOBAL_CERT_INFO[${CERT_LIST_KEY};$i]=${!i}
+        done
     elif [ ${PORT} = "FILEJKS" ] || [ ${CERTTYPE} = "JKS" ]
     then
       # pickup first cert from what we have in keystore
@@ -768,6 +785,22 @@ check_file_status() {
       JKS_EXPORT_TMP=$($MKTEMP /var/tmp/jks_export.XXXXXX)
       echo "" | keytool -exportcert -keystore "${CERTFILE}"  -alias "${JKSALIAS}"  -file ${JKS_EXPORT_TMP} 2>/dev/null
       openssl_extract_cert_info ${JKS_EXPORT_TMP} DER
+      CERT_LIST_KEY=${CERT_LIST_KEY:-FILE:${CERTFILE}(alias=${JKSALIAS})}
+      GLOBAL_CERT_LIST+=(${CERT_LIST_KEY})
+      GLOBAL_CERT_INFO[${CERT_LIST_KEY};TYPE]="JKS"
+      GLOBAL_CERT_INFO[${CERT_LIST_KEY};MAINFILE]=${CERTFILE}
+      GLOBAL_CERT_INFO[${CERT_LIST_KEY};TEMPFILE]=${JKS_EXPORT_TMP}
+
+      for i in CERTDATE CERTISSUER COMMONNAME SERIAL ; do
+        GLOBAL_CERT_INFO[${CERT_LIST_KEY};$i]=${!i}
+      done
+      if [ $DEBUG ]
+      then
+         echo CERT_LIST_KEY=$CERT_LIST_KEY
+         for i in CERTDATE CERTISSUER COMMONNAME SERIAL TYPE MAINFILE TEMPFILE ; do
+           echo "$i=${GLOBAL_CERT_INFO[${CERT_LIST_KEY};$i]}"
+         done
+      fi
     else
         # Extract the expiration date from the ceriticate
         CERTDATE=$(${OPENSSL} x509 -in ${CERTFILE} -enddate -noout -inform ${CERTTYPE} | \
@@ -785,6 +818,19 @@ check_file_status() {
         ### Grab the serial number from the X.509 certificate
         SERIAL=$(${OPENSSL} x509 -in ${CERTFILE} -serial -noout -inform ${CERTTYPE} | \
                    ${SED} -e 's/serial=//')
+        CERT_LIST_KEY=${CERT_LIST_KEY:-FILE:${CERTFILE}}
+        GLOBAL_CERT_LIST+=(${CERT_LIST_KEY})
+        for i in CERTDATE CERTISSUER COMMONNAME SERIAL ; do
+          GLOBAL_CERT_INFO[${CERT_LIST_KEY};$i]=${!i}
+        done
+        GLOBAL_CERT_INFO[${CERT_LIST_KEY};TYPE]="PEM"
+      	if [[ ${CERT_LIST_KEY} =~ "^SITE" ]]
+      	then
+          	    GLOBAL_CERT_INFO[${CERT_LIST_KEY};MAINFILE]=${CERTFILE}
+      	else
+      	    #echo fake
+          	    GLOBAL_CERT_INFO[${CERT_LIST_KEY};TEMPFILE]=${CERTFILE}
+      	fi
     fi
 
     ### Split the result into parameters, and pass the relevant pieces to date2julian
@@ -794,6 +840,9 @@ check_file_status() {
     # Convert the date to seconds, and get the diff between NOW and the expiration date
     CERTJULIAN=$(date2julian ${MONTH#0} ${2#0} ${4})
     CERTDIFF=$(date_diff ${NOWJULIAN} ${CERTJULIAN})
+    for i in CERTDIFF ; do
+      GLOBAL_CERT_INFO[${CERT_LIST_KEY};$i]=${!i}
+    done
 
     if [ ${CERTDIFF} -lt 0 ]
     then
@@ -821,6 +870,14 @@ check_file_status() {
         RETCODE_LOCAL=0
     fi
 
+    GLOBAL_CERT_INFO[${CERT_LIST_KEY};RETCODE]=${RETCODE_LOCAL}
+    if [ $DEBUG ]
+    then
+       echo CERT_LIST_KEY=$CERT_LIST_KEY
+       for i in CERTDATE CERTISSUER COMMONNAME SERIAL RETCODE TYPE MAINFILE TEMPFILE; do
+         echo "$i=${GLOBAL_CERT_INFO[${CERT_LIST_KEY};$i]}"
+       done
+    fi
     set_returncode ${RETCODE_LOCAL}
     MIN_DATE=$(echo ${CERTDATE} | ${AWK} '{ print $1, $2, $4 }')
     set_summary ${RETCODE_LOCAL} ${HOST} ${PORT} "${MIN_DATE}" ${CERTDIFF}
