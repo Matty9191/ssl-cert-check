@@ -430,6 +430,8 @@ date_diff()
     fi
 }
 
+_debug() { if [ ${DEBUG} ] ; then echo "$*" ; fi }
+
 #####################################################################
 # Purpose: Print a line with the expiraton interval
 # Arguments:
@@ -786,7 +788,7 @@ check_file_status() {
       echo "" | keytool -exportcert -keystore "${CERTFILE}"  -alias "${JKSALIAS}"  -file ${JKS_EXPORT_TMP} 2>/dev/null
       openssl_extract_cert_info ${JKS_EXPORT_TMP} DER
       CERT_LIST_KEY=${CERT_LIST_KEY:-FILE:${CERTFILE}(alias=${JKSALIAS})}
-      GLOBAL_CERT_LIST+=(${CERT_LIST_KEY})
+      GLOBAL_CERT_LIST+=("${CERT_LIST_KEY}")
       GLOBAL_CERT_INFO[${CERT_LIST_KEY};TYPE]="JKS"
       GLOBAL_CERT_INFO[${CERT_LIST_KEY};MAINFILE]=${CERTFILE}
       GLOBAL_CERT_INFO[${CERT_LIST_KEY};TEMPFILE]=${JKS_EXPORT_TMP}
@@ -846,22 +848,11 @@ check_file_status() {
 
     if [ ${CERTDIFF} -lt 0 ]
     then
-        if [ "${ALARM}" = "TRUE" ]
-        then
-            send_mail ${SENDER} ${ADMIN} "Certificate for ${HOST} \"(CN: ${COMMONNAME})\" has expired!" \
-                "The SSL certificate for ${HOST} \"(CN: ${COMMONNAME})\" has expired!"
-        fi
-
         prints ${HOST} ${PORT} "Expired" "${CERTDATE}" "${CERTDIFF}" "${CERTISSUER}" "${COMMONNAME}" "${SERIAL}"
         RETCODE_LOCAL=2
 
     elif [ ${CERTDIFF} -lt ${WARNDAYS} ]
     then
-        if [ "${ALARM}" = "TRUE" ]
-        then
-            send_mail ${SENDER} ${ADMIN} "Certificate for ${HOST} \"(CN: ${COMMONNAME})\" will expire in ${WARNDAYS}-days or less" \
-                "The SSL certificate for ${HOST} \"(CN: ${COMMONNAME})\" will expire on ${CERTDATE}"
-        fi
         prints ${HOST} ${PORT} "Expiring" "${CERTDATE}" "${CERTDIFF}" "${CERTISSUER}" "${COMMONNAME}" "${SERIAL}"
         RETCODE_LOCAL=1
 
@@ -874,13 +865,39 @@ check_file_status() {
     if [ $DEBUG ]
     then
        echo CERT_LIST_KEY=$CERT_LIST_KEY
+       echo "GLOBAL_CERT_LIST[0]=${GLOBAL_CERT_LIST[0]}"
        for i in CERTDATE CERTISSUER COMMONNAME SERIAL RETCODE TYPE MAINFILE TEMPFILE; do
-         echo "$i=${GLOBAL_CERT_INFO[${CERT_LIST_KEY};$i]}"
+         echo "$i=${GLOBAL_CERT_INFO[${GLOBAL_CERT_LIST[0]};$i]}"
        done
     fi
     set_returncode ${RETCODE_LOCAL}
     MIN_DATE=$(echo ${CERTDATE} | ${AWK} '{ print $1, $2, $4 }')
     set_summary ${RETCODE_LOCAL} ${HOST} ${PORT} "${MIN_DATE}" ${CERTDIFF}
+}
+
+### process all GLOBAL_CERT_INFO and send mail if needed
+process_mail(){
+  if [ $DEBUG ]
+  then
+    echo "Trying send mails"
+  fi
+  if [ "${ALARM}" = "TRUE" ]
+  then
+    _debug "ALARM=TRUE"
+    _debug "${#GLOBAL_CERT_LIST[*]} : ${GLOBAL_CERT_LIST[0]}"
+   for i in "${GLOBAL_CERT_LIST}" ; do
+    _debug "\"$i\" ;  ${GLOBAL_CERT_INFO[${i};RETCODE]}"
+    case ${GLOBAL_CERT_INFO[${i};RETCODE]}
+      in
+      2) send_mail ${SENDER} ${ADMIN} "Certificate for ${HOST} \"(CN: ${COMMONNAME})\" has expired!" \
+                "The SSL certificate for ${i} \"(CN: ${COMMONNAME})\" has expired!"
+                ;;
+      1)  send_mail ${SENDER} ${ADMIN} "Certificate for ${HOST} \"(CN: ${COMMONNAME})\" will expire in ${WARNDAYS}-days or less" \
+                "The SSL certificate for ${i} \"(CN: ${COMMONNAME})\" will expire on ${CERTDATE}"
+                ;;
+    esac
+   done
+  fi
 }
 
 #################################
@@ -1055,6 +1072,8 @@ fi
 
 rm -f ${CERT_TMP} ${ERROR_TMP}
 
+# send emails if needed
+process_mail
 ### Exit with a success indicator
 if [ "${NAGIOS}" = "TRUE" ]
 then
