@@ -900,7 +900,7 @@ process_mail(){
       if [ $count_expiring -gt 0 ]
       then
         _debug "${MESSAGE}"
-        send_mail ${SENDER} ${ADMIN} "Certificates will expire in ${WARNDAYS}-days or less" "${MESSAGE}"
+        send_mail ${SENDER} ${ADMIN} "Certificates expiration report: $((${SUMMARY_EXPIRED} + ${SUMMARY_EXPIRED})) will expire in ${WARNDAYS}-days or less" "${MESSAGE}"
       fi
     else
        for i in "${GLOBAL_CERT_LIST}" ; do
