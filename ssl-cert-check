@@ -757,31 +757,23 @@ check_file_status() {
         ${OPENSSL} pkcs12 -nokeys -in ${CERTFILE} \
                    -out ${CERT_TMP} -clcerts -password pass:${PKCSDBPASSWD} 2> /dev/null
 
-        # Extract the expiration date from the certificate
-        CERTDATE=$(${OPENSSL} x509 -in ${CERT_TMP} -enddate -noout | \
-                 ${SED} 's/notAfter\=//')
-
-        # Extract the issuer from the certificate
-        CERTISSUER=$(${OPENSSL} x509 -in ${CERT_TMP} -issuer -noout | \
-                   ${AWK} 'BEGIN {RS="/" } $0 ~ /^O=/ \
-                                 { print substr($0,3,17)}')
-
-        ### Grab the common name (CN) from the X.509 certificate
-        COMMONNAME=$(${OPENSSL} x509 -in ${CERT_TMP} -subject -noout | \
-                   ${SED} -e 's/.*CN=//' | \
-                   ${SED} -e 's/\/.*//')
-
-        ### Grab the serial number from the X.509 certificate
-        SERIAL=$(${OPENSSL} x509 -in ${CERT_TMP} -serial -noout | \
-                   ${SED} -e 's/serial=//')
+        # pkcs12 export cert in PEM format
+        openssl_extract_cert_info ${CERT_TMP} PEM
         CERT_LIST_KEY=${CERT_LIST_KEY:-FILE:${CERTFILE}}
         GLOBAL_CERT_LIST+=(${CERT_LIST_KEY})
         GLOBAL_CERT_INFO[${CERT_LIST_KEY};TYPE]="PKCS12"
+
         GLOBAL_CERT_INFO[${CERT_LIST_KEY};MAINFILE]=${CERTFILE}
         GLOBAL_CERT_INFO[${CERT_LIST_KEY};TEMPFILE]=${CERT_TMP}
         for i in CERTDATE CERTISSUER COMMONNAME SERIAL ; do
           GLOBAL_CERT_INFO[${CERT_LIST_KEY};$i]=${!i}
         done
+
+        calc_dates_summary
+        for i in CERTDIFF ; do
+          GLOBAL_CERT_INFO[${CERT_LIST_KEY};$i]=${!i}
+        done
+        GLOBAL_CERT_INFO[${CERT_LIST_KEY};RETCODE]=${RETCODE_LOCAL}
     elif [ ${PORT} = "FILEJKS" ] || [ ${CERTTYPE} = "JKS" ]
     then
       # pickup first cert from what we have in keystore
@@ -794,12 +786,20 @@ check_file_status() {
       CERT_LIST_KEY=${CERT_LIST_KEY:-FILE:${CERTFILE}(alias=${JKSALIAS})}
       GLOBAL_CERT_LIST+=("${CERT_LIST_KEY}")
       GLOBAL_CERT_INFO[${CERT_LIST_KEY};TYPE]="JKS"
+
       GLOBAL_CERT_INFO[${CERT_LIST_KEY};MAINFILE]=${CERTFILE}
       GLOBAL_CERT_INFO[${CERT_LIST_KEY};TEMPFILE]=${JKS_EXPORT_TMP}
 
       for i in CERTDATE CERTISSUER COMMONNAME SERIAL ; do
         GLOBAL_CERT_INFO[${CERT_LIST_KEY};$i]=${!i}
       done
+
+      calc_dates_summary
+      for i in CERTDIFF ; do
+        GLOBAL_CERT_INFO[${CERT_LIST_KEY};$i]=${!i}
+      done
+      GLOBAL_CERT_INFO[${CERT_LIST_KEY};RETCODE]=${RETCODE_LOCAL}
+
       if [ $DEBUG -eq 1 ]
       then
          echo CERT_LIST_KEY=$CERT_LIST_KEY
@@ -808,74 +808,70 @@ check_file_status() {
          done
       fi
     else
-        # Extract the expiration date from the ceriticate
-        CERTDATE=$(${OPENSSL} x509 -in ${CERTFILE} -enddate -noout -inform ${CERTTYPE} | \
-                 ${SED} 's/notAfter\=//')
+      openssl_extract_cert_info ${CERTFILE} ${CERTTYPE}
 
-        # Extract the issuer from the certificate
-        CERTISSUER=$(${OPENSSL} x509 -in ${CERTFILE} -issuer -noout -inform ${CERTTYPE} | \
-                   ${AWK} 'BEGIN {RS="/" } $0 ~ /^O=/ { print substr($0,3,17)}')
-
-        ### Grab the common name (CN) from the X.509 certificate
-        COMMONNAME=$(${OPENSSL} x509 -in ${CERTFILE} -subject -noout -inform ${CERTTYPE} | \
-                   ${SED} -e 's/.*CN=//' | \
-                   ${SED} -e 's/\/.*//')
-
-        ### Grab the serial number from the X.509 certificate
-        SERIAL=$(${OPENSSL} x509 -in ${CERTFILE} -serial -noout -inform ${CERTTYPE} | \
-                   ${SED} -e 's/serial=//')
         CERT_LIST_KEY=${CERT_LIST_KEY:-FILE:${CERTFILE}}
         GLOBAL_CERT_LIST+=(${CERT_LIST_KEY})
+        GLOBAL_CERT_INFO[${CERT_LIST_KEY};TYPE]="PEM"
+
         for i in CERTDATE CERTISSUER COMMONNAME SERIAL ; do
           GLOBAL_CERT_INFO[${CERT_LIST_KEY};$i]=${!i}
         done
-        GLOBAL_CERT_INFO[${CERT_LIST_KEY};TYPE]="PEM"
-      	if [[ ${CERT_LIST_KEY} =~ "^SITE" ]]
+
+        calc_dates_summary
+        for i in CERTDIFF ; do
+          GLOBAL_CERT_INFO[${CERT_LIST_KEY};$i]=${!i}
+        done
+        GLOBAL_CERT_INFO[${CERT_LIST_KEY};RETCODE]=${RETCODE_LOCAL}
+
+        if [[ ${CERT_LIST_KEY} =~ "SITE" ]]
       	then
-          	    GLOBAL_CERT_INFO[${CERT_LIST_KEY};MAINFILE]=${CERTFILE}
+          GLOBAL_CERT_INFO[${CERT_LIST_KEY};TEMPFILE]=${CERTFILE}
       	else
-          	    GLOBAL_CERT_INFO[${CERT_LIST_KEY};TEMPFILE]=${CERTFILE}
+          GLOBAL_CERT_INFO[${CERT_LIST_KEY};MAINFILE]=${CERTFILE}
       	fi
+
+        if [ $DEBUG -eq 1 ]
+        then
+           echo CERT_LIST_KEY=$CERT_LIST_KEY
+           for i in CERTDATE CERTISSUER COMMONNAME SERIAL RETCODE TYPE MAINFILE TEMPFILE; do
+             echo "$i=${GLOBAL_CERT_INFO[${GLOBAL_CERT_LIST[0]};$i]}"
+           done
+        fi
+
     fi
 
-    ### Split the result into parameters, and pass the relevant pieces to date2julian
-    set -- ${CERTDATE}
-    MONTH=$(getmonth ${1})
+}
 
-    # Convert the date to seconds, and get the diff between NOW and the expiration date
-    CERTJULIAN=$(date2julian ${MONTH#0} ${2#0} ${4})
-    CERTDIFF=$(date_diff ${NOWJULIAN} ${CERTJULIAN})
-    for i in CERTDIFF ; do
-      GLOBAL_CERT_INFO[${CERT_LIST_KEY};$i]=${!i}
-    done
+### Calculate dates info and summary
+calc_dates_summary(){
+  ### Split the result into parameters, and pass the relevant pieces to date2julian
+  set -- ${CERTDATE}
+  MONTH=$(getmonth ${1})
 
-    if [ ${CERTDIFF} -lt 0 ]
-    then
-        prints ${HOST} ${PORT} "Expired" "${CERTDATE}" "${CERTDIFF}" "${CERTISSUER}" "${COMMONNAME}" "${SERIAL}"
-        RETCODE_LOCAL=2
+  # Convert the date to seconds, and get the diff between NOW and the expiration date
+  CERTJULIAN=$(date2julian ${MONTH#0} ${2#0} ${4})
+  CERTDIFF=$(date_diff ${NOWJULIAN} ${CERTJULIAN})
 
-    elif [ ${CERTDIFF} -lt ${WARNDAYS} ]
-    then
-        prints ${HOST} ${PORT} "Expiring" "${CERTDATE}" "${CERTDIFF}" "${CERTISSUER}" "${COMMONNAME}" "${SERIAL}"
-        RETCODE_LOCAL=1
+  if [ ${CERTDIFF} -lt 0 ]
+  then
+      prints ${HOST} ${PORT} "Expired" "${CERTDATE}" "${CERTDIFF}" "${CERTISSUER}" "${COMMONNAME}" "${SERIAL}"
+      RETCODE_LOCAL=2
 
-    else
-        prints ${HOST} ${PORT} "Valid" "${CERTDATE}" "${CERTDIFF}" "${CERTISSUER}" "${COMMONNAME}" "${SERIAL}"
-        RETCODE_LOCAL=0
-    fi
+  elif [ ${CERTDIFF} -lt ${WARNDAYS} ]
+  then
+      prints ${HOST} ${PORT} "Expiring" "${CERTDATE}" "${CERTDIFF}" "${CERTISSUER}" "${COMMONNAME}" "${SERIAL}"
+      RETCODE_LOCAL=1
 
-    GLOBAL_CERT_INFO[${CERT_LIST_KEY};RETCODE]=${RETCODE_LOCAL}
-    if [ $DEBUG -eq 1 ]
-    then
-       echo CERT_LIST_KEY=$CERT_LIST_KEY
-       echo "GLOBAL_CERT_LIST[0]=${GLOBAL_CERT_LIST[0]}"
-       for i in CERTDATE CERTISSUER COMMONNAME SERIAL RETCODE TYPE MAINFILE TEMPFILE; do
-         echo "$i=${GLOBAL_CERT_INFO[${GLOBAL_CERT_LIST[0]};$i]}"
-       done
-    fi
-    set_returncode ${RETCODE_LOCAL}
-    MIN_DATE=$(echo ${CERTDATE} | ${AWK} '{ print $1, $2, $4 }')
-    set_summary ${RETCODE_LOCAL} ${HOST} ${PORT} "${MIN_DATE}" ${CERTDIFF}
+  else
+      prints ${HOST} ${PORT} "Valid" "${CERTDATE}" "${CERTDIFF}" "${CERTISSUER}" "${COMMONNAME}" "${SERIAL}"
+      RETCODE_LOCAL=0
+  fi
+
+  set_returncode ${RETCODE_LOCAL}
+  MIN_DATE=$(echo ${CERTDATE} | ${AWK} '{ print $1, $2, $4 }')
+  set_summary ${RETCODE_LOCAL} ${HOST} ${PORT} "${MIN_DATE}" ${CERTDIFF}
+
 }
 
 ### process all GLOBAL_CERT_INFO and send mail if needed
