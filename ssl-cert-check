@@ -744,7 +744,7 @@ check_file_status() {
     if [ ! -r ${CERTFILE} ] || [ ! -s ${CERTFILE} ]
     then
         echo "ERROR: The file named ${CERTFILE} is unreadable or doesn't exist"
-        echo "ERROR: Please check to make sure the certificate for ${HOST}:${PORT} is valid"
+        echo "ERROR: Please check to make sure the certificate for FILE:${HOST}:${PORT} is valid"
         set_returncode 3
         return
     fi
@@ -1051,7 +1051,7 @@ then
         IFS=" "
         if [[ "$PORT" =~ "FILE" ]]
         then
-            check_file_status ${HOST} ${PORT} "${HOST}"
+            check_file_status ${HOST} "${HOST}" ${PORT}
         else
             check_server_status "${HOST}" "${PORT}"
         fi
@@ -1063,7 +1063,7 @@ then
 elif [ "${CERTFILE}" != "" ]
 then
     print_heading
-    check_file_status ${CERTFILE} "FILE" "${CERTFILE}"
+    check_file_status ${CERTFILE} "${CERTFILE}" "FILE"
     print_summary
 
 ### Check to see if the certificates in CERTDIRECTORY are about to expire
@@ -1071,7 +1071,7 @@ elif [ "${CERTDIRECTORY}" != "" ] && (${FIND} -L ${CERTDIRECTORY} -type f > /dev
 then
     print_heading
     for FILE in `${FIND} -L ${CERTDIRECTORY} -type f`; do
-        check_file_status ${FILE} "FILE" "${FILE}"
+        check_file_status ${FILE} "${FILE}" "FILE"
     done
     print_summary
 
