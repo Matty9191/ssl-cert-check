@@ -777,36 +777,36 @@ check_file_status() {
     elif [ ${PORT} = "FILEJKS" ] || [ ${CERTTYPE} = "JKS" ]
     then
       # pickup first cert from what we have in keystore
-      JKSALIAS=$(echo "" | keytool -list -keystore ${CERTFILE}  2>/dev/null  | \
-                  ${SED} -e '1,/Your keystore contains/d' -e '/Certificate fingerprint/d' -e 's/,.*//' -e '/^\s*$/d'| \
-                  head -4 | tail -1)
-      JKS_EXPORT_TMP=$($MKTEMP /var/tmp/jks_export.XXXXXX)
-      echo "" | keytool -exportcert -keystore "${CERTFILE}"  -alias "${JKSALIAS}"  -file ${JKS_EXPORT_TMP} 2>/dev/null
-      openssl_extract_cert_info ${JKS_EXPORT_TMP} DER
-      CERT_LIST_KEY=${CERT_LIST_KEY:-FILE:${CERTFILE}(alias=${JKSALIAS})}
-      GLOBAL_CERT_LIST+=("${CERT_LIST_KEY}")
-      GLOBAL_CERT_INFO[${CERT_LIST_KEY};TYPE]="JKS"
+      while read JKSALIAS ; do
+          _debug JKSALIAS=$JKSALIAS
+          JKS_EXPORT_TMP=$($MKTEMP /var/tmp/jks_export.XXXXXX)
+          echo "" | keytool -exportcert -keystore "${CERTFILE}"  -alias "${JKSALIAS}"  -file ${JKS_EXPORT_TMP} 2>/dev/null
+          openssl_extract_cert_info ${JKS_EXPORT_TMP} DER
+          CERT_LIST_KEY="FILE:${CERTFILE}(alias=${JKSALIAS})"
+          GLOBAL_CERT_LIST+=("${CERT_LIST_KEY}")
+          GLOBAL_CERT_INFO[${CERT_LIST_KEY};TYPE]="JKS"
 
-      GLOBAL_CERT_INFO[${CERT_LIST_KEY};MAINFILE]=${CERTFILE}
-      GLOBAL_CERT_INFO[${CERT_LIST_KEY};TEMPFILE]=${JKS_EXPORT_TMP}
+          GLOBAL_CERT_INFO[${CERT_LIST_KEY};MAINFILE]=${CERTFILE}
+          GLOBAL_CERT_INFO[${CERT_LIST_KEY};TEMPFILE]=${JKS_EXPORT_TMP}
 
-      for i in CERTDATE CERTISSUER COMMONNAME SERIAL ; do
-        GLOBAL_CERT_INFO[${CERT_LIST_KEY};$i]=${!i}
-      done
+          for i in CERTDATE CERTISSUER COMMONNAME SERIAL ; do
+            GLOBAL_CERT_INFO[${CERT_LIST_KEY};$i]=${!i}
+          done
 
-      calc_dates_summary
-      for i in CERTDIFF ; do
-        GLOBAL_CERT_INFO[${CERT_LIST_KEY};$i]=${!i}
-      done
-      GLOBAL_CERT_INFO[${CERT_LIST_KEY};RETCODE]=${RETCODE_LOCAL}
+          calc_dates_summary
+          for i in CERTDIFF ; do
+            GLOBAL_CERT_INFO[${CERT_LIST_KEY};$i]=${!i}
+          done
+          GLOBAL_CERT_INFO[${CERT_LIST_KEY};RETCODE]=${RETCODE_LOCAL}
 
-      if [ $DEBUG -eq 1 ]
-      then
-         echo CERT_LIST_KEY=$CERT_LIST_KEY
-         for i in CERTDATE CERTISSUER COMMONNAME SERIAL TYPE MAINFILE TEMPFILE ; do
-           echo "$i=${GLOBAL_CERT_INFO[${CERT_LIST_KEY};$i]}"
-         done
-      fi
+          if [ $DEBUG -eq 1 ]
+          then
+             echo CERT_LIST_KEY=$CERT_LIST_KEY
+             for i in CERTDATE CERTISSUER COMMONNAME SERIAL TYPE MAINFILE TEMPFILE ; do
+               echo "$i=${GLOBAL_CERT_INFO[${CERT_LIST_KEY};$i]}"
+             done
+          fi
+      done < <(echo "" | keytool -list -keystore ${CERTFILE}  2>/dev/null  | ${SED} -e '1,/Your keystore contains/d' -e '/Certificate fingerprint/d' -e 's/,.*//' -e '/^\s*$/d')
     else
       openssl_extract_cert_info ${CERTFILE} ${CERTTYPE}
 
