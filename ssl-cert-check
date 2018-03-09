@@ -12,6 +12,13 @@
 #
 # Revision History:
 #
+# Version 3.31a
+#  - Add support of JKS keystore -- Stanislav Davydov
+#  - support to send just one aggregated mail -- Stanislav Davydov
+#
+# Version 3.31
+#  - Add support for bsd-mailx -- Chad Sheets
+#
 # Version 3.30
 #  - Use highest returncode for Nagios output -- Marcel Pennewiss
 #  - Set RETCODE to 3 (unknown) if a certificate file does not exist -- Marcel Pennewiss
@@ -236,6 +243,9 @@ QUIET="FALSE"
 # Don't send E-mail by default (cmdline: -a)
 ALARM="FALSE"
 
+# send separate mail by defaults
+AGGREGATE_MAIL=0
+
 # Don't run as a Nagios plugin by default (cmdline: -n)
 NAGIOS="FALSE"
 
@@ -268,7 +278,12 @@ FIND=$(which find)
 if [ -f /usr/bin/mailx ]
 then
     MAIL="/usr/bin/mailx"
-    MAILMODE="mailx"
+    if [[ $(readlink -e $MAIL) =~ "bsd" ]]
+	then
+	    MAILMODE="bsd-mailx"
+	else
+	    MAILMODE="mailx"
+    fi
 elif [ -f /bin/mail ]
 then
     MAIL="/bin/mail"
@@ -288,7 +303,7 @@ then
 elif [ -f /usr/sbin/sendmail ]
 then
     MAIL="/usr/sbin/sendmail"
-    MAILMODE="sendmail"    
+    MAILMODE="sendmail"
 else
     MAIL="cantfindit"
     MAILMODE="cantfindit"
@@ -305,6 +320,11 @@ SUMMARY_MIN_DIFF=0
 SUMMARY_MIN_DATE=
 SUMMARY_MIN_HOST=
 SUMMARY_MIN_PORT=
+
+# list of certs to use as key in GLOBAL_CERT_INFO
+declare -a GLOBAL CERT_LIST
+# Associative array for massive cert procession (emulate 2D)
+declare -A GLOBAL_CERT_INFO
 
 # Set the default umask to be somewhat restrictive
 umask 077
@@ -328,6 +348,9 @@ send_mail() {
     case "${MAILMODE}" in
         "mail" | "mailx")
             echo "$MSG" | ${MAIL} -r $FROM -s "$SUBJECT" $TO
+            ;;
+        "bsd-mailx")
+            echo "$MSG" | ${MAIL} -s "$SUBJECT" $TO
             ;;
         "sendmail")
             (echo "Subject:$SUBJECT" && echo "TO:$TO" && echo "FROM:$FROM" && echo "$MSG") | ${MAIL} $TO
@@ -410,6 +433,8 @@ date_diff()
         echo 0
     fi
 }
+
+_debug() { if [ ${DEBUG} -eq 1 ] ; then echo "$*" ; fi }
 
 #####################################################################
 # Purpose: Print a line with the expiraton interval
@@ -669,8 +694,36 @@ check_server_status() {
         set_returncode 3
 
     else
-        check_file_status ${CERT_TMP} $1 $2
+        check_file_status ${CERT_TMP} $1 $2 "SITE:$1:$2"
     fi
+}
+
+#####################################################
+### Extract cert info from  x509 certificate file
+### Accepts two parameters:
+###  $1 -> certificate file to process
+###  $2 -> certificate type (PEM|DER)
+#####################################################
+openssl_extract_cert_info() {
+    local CERTFILE=${1}
+    local CERTTYPE=${2}
+
+    # Extract the expiration date from the ceriticate
+    CERTDATE=$(${OPENSSL} x509 -in ${CERTFILE} -enddate -noout -inform ${CERTTYPE} | \
+         ${SED} 's/notAfter\=//')
+
+    # Extract the issuer from the certificate
+    CERTISSUER=$(${OPENSSL} x509 -in ${CERTFILE} -issuer -noout -inform ${CERTTYPE} | \
+           ${AWK} 'BEGIN {RS="/" } $0 ~ /^O=/ { print substr($0,3,17)}')
+
+    ### Grab the common name (CN) from the X.509 certificate
+    COMMONNAME=$(${OPENSSL} x509 -in ${CERTFILE} -subject -noout -inform ${CERTTYPE} | \
+           ${SED} -e 's/.*CN=//' | \
+           ${SED} -e 's/\/.*//')
+
+    ### Grab the serial number from the X.509 certificate
+    SERIAL=$(${OPENSSL} x509 -in ${CERTFILE} -serial -noout -inform ${CERTTYPE} | \
+           ${SED} -e 's/serial=//')
 }
 
 #####################################################
@@ -685,12 +738,13 @@ check_file_status() {
     CERTFILE=${1}
     HOST=${2}
     PORT=${3}
+    local CERT_LIST_KEY=${4}  # optional must be  set for online SITE based certificates. Important(!) not(!) set for FILE based (especially JKS)
 
     ### Check to make sure the certificate file exists
     if [ ! -r ${CERTFILE} ] || [ ! -s ${CERTFILE} ]
     then
         echo "ERROR: The file named ${CERTFILE} is unreadable or doesn't exist"
-        echo "ERROR: Please check to make sure the certificate for ${HOST}:${PORT} is valid"
+        echo "ERROR: Please check to make sure the certificate for FILE:${HOST}:${PORT} is valid"
         set_returncode 3
         return
     fi
@@ -703,94 +757,182 @@ check_file_status() {
         ${OPENSSL} pkcs12 -nokeys -in ${CERTFILE} \
                    -out ${CERT_TMP} -clcerts -password pass:${PKCSDBPASSWD} 2> /dev/null
 
-        # Extract the expiration date from the certificate
-        CERTDATE=$(${OPENSSL} x509 -in ${CERT_TMP} -enddate -noout | \
-                 ${SED} 's/notAfter\=//')
+        # pkcs12 export cert in PEM format
+        openssl_extract_cert_info ${CERT_TMP} PEM
+        CERT_LIST_KEY=${CERT_LIST_KEY:-FILE:${CERTFILE}}
+        GLOBAL_CERT_LIST+=(${CERT_LIST_KEY})
+        GLOBAL_CERT_INFO[${CERT_LIST_KEY};TYPE]="PKCS12"
 
-        # Extract the issuer from the certificate
-        CERTISSUER=$(${OPENSSL} x509 -in ${CERT_TMP} -issuer -noout | \
-                   ${AWK} 'BEGIN {RS="/" } $0 ~ /^O=/ \
-                                 { print substr($0,3,17)}')
+        GLOBAL_CERT_INFO[${CERT_LIST_KEY};MAINFILE]=${CERTFILE}
+        GLOBAL_CERT_INFO[${CERT_LIST_KEY};TEMPFILE]=${CERT_TMP}
+        for i in CERTDATE CERTISSUER COMMONNAME SERIAL ; do
+          GLOBAL_CERT_INFO[${CERT_LIST_KEY};$i]=${!i}
+        done
 
-        ### Grab the common name (CN) from the X.509 certificate
-        COMMONNAME=$(${OPENSSL} x509 -in ${CERT_TMP} -subject -noout | \
-                   ${SED} -e 's/.*CN=//' | \
-                   ${SED} -e 's/\/.*//')
-
-        ### Grab the serial number from the X.509 certificate
-        SERIAL=$(${OPENSSL} x509 -in ${CERT_TMP} -serial -noout | \
-                   ${SED} -e 's/serial=//')
-    else
-        # Extract the expiration date from the ceriticate
-        CERTDATE=$(${OPENSSL} x509 -in ${CERTFILE} -enddate -noout -inform ${CERTTYPE} | \
-                 ${SED} 's/notAfter\=//')
-
-        # Extract the issuer from the certificate
-        CERTISSUER=$(${OPENSSL} x509 -in ${CERTFILE} -issuer -noout -inform ${CERTTYPE} | \
-                   ${AWK} 'BEGIN {RS="/" } $0 ~ /^O=/ { print substr($0,3,17)}')
-
-        ### Grab the common name (CN) from the X.509 certificate
-        COMMONNAME=$(${OPENSSL} x509 -in ${CERTFILE} -subject -noout -inform ${CERTTYPE} | \
-                   ${SED} -e 's/.*CN=//' | \
-                   ${SED} -e 's/\/.*//')
-
-        ### Grab the serial number from the X.509 certificate
-        SERIAL=$(${OPENSSL} x509 -in ${CERTFILE} -serial -noout -inform ${CERTTYPE} | \
-                   ${SED} -e 's/serial=//')
-    fi
-
-    ### Split the result into parameters, and pass the relevant pieces to date2julian
-    set -- ${CERTDATE}
-    MONTH=$(getmonth ${1})
-
-    # Convert the date to seconds, and get the diff between NOW and the expiration date
-    CERTJULIAN=$(date2julian ${MONTH#0} ${2#0} ${4})
-    CERTDIFF=$(date_diff ${NOWJULIAN} ${CERTJULIAN})
-
-    if [ ${CERTDIFF} -lt 0 ]
+        calc_dates_summary
+        for i in CERTDIFF ; do
+          GLOBAL_CERT_INFO[${CERT_LIST_KEY};$i]=${!i}
+        done
+        GLOBAL_CERT_INFO[${CERT_LIST_KEY};RETCODE]=${RETCODE_LOCAL}
+    elif [ ${PORT} = "FILEJKS" ] || [ ${CERTTYPE} = "JKS" ]
     then
-        if [ "${ALARM}" = "TRUE" ]
+      # pickup first cert from what we have in keystore
+      while read JKSALIAS ; do
+          _debug JKSALIAS=$JKSALIAS
+          JKS_EXPORT_TMP=$($MKTEMP /var/tmp/jks_export.XXXXXX)
+          echo "" | keytool -exportcert -keystore "${CERTFILE}"  -alias "${JKSALIAS}"  -file ${JKS_EXPORT_TMP} 2>/dev/null
+          openssl_extract_cert_info ${JKS_EXPORT_TMP} DER
+          CERT_LIST_KEY="FILE:${CERTFILE}(alias=${JKSALIAS})"
+          GLOBAL_CERT_LIST+=("${CERT_LIST_KEY}")
+          GLOBAL_CERT_INFO[${CERT_LIST_KEY};TYPE]="JKS"
+
+          GLOBAL_CERT_INFO[${CERT_LIST_KEY};MAINFILE]=${CERTFILE}
+          GLOBAL_CERT_INFO[${CERT_LIST_KEY};TEMPFILE]=${JKS_EXPORT_TMP}
+
+          for i in CERTDATE CERTISSUER COMMONNAME SERIAL ; do
+            GLOBAL_CERT_INFO[${CERT_LIST_KEY};$i]=${!i}
+          done
+
+          calc_dates_summary
+          for i in CERTDIFF ; do
+            GLOBAL_CERT_INFO[${CERT_LIST_KEY};$i]=${!i}
+          done
+          GLOBAL_CERT_INFO[${CERT_LIST_KEY};RETCODE]=${RETCODE_LOCAL}
+
+          if [ $DEBUG -eq 1 ]
+          then
+             echo CERT_LIST_KEY=$CERT_LIST_KEY
+             for i in CERTDATE CERTISSUER COMMONNAME SERIAL TYPE MAINFILE TEMPFILE ; do
+               echo "$i=${GLOBAL_CERT_INFO[${CERT_LIST_KEY};$i]}"
+             done
+          fi
+      done < <(echo "" | keytool -list -keystore ${CERTFILE}  2>/dev/null  | ${SED} -e '1,/Your keystore contains/d' -e '/Certificate fingerprint/d' -e 's/,.*//' -e '/^\s*$/d')
+    else
+      openssl_extract_cert_info ${CERTFILE} ${CERTTYPE}
+
+        CERT_LIST_KEY=${CERT_LIST_KEY:-FILE:${CERTFILE}}
+        GLOBAL_CERT_LIST+=(${CERT_LIST_KEY})
+        GLOBAL_CERT_INFO[${CERT_LIST_KEY};TYPE]="PEM"
+
+        for i in CERTDATE CERTISSUER COMMONNAME SERIAL ; do
+          GLOBAL_CERT_INFO[${CERT_LIST_KEY};$i]=${!i}
+        done
+
+        calc_dates_summary
+        for i in CERTDIFF ; do
+          GLOBAL_CERT_INFO[${CERT_LIST_KEY};$i]=${!i}
+        done
+        GLOBAL_CERT_INFO[${CERT_LIST_KEY};RETCODE]=${RETCODE_LOCAL}
+
+        if [[ ${CERT_LIST_KEY} =~ "SITE" ]]
+      	then
+          GLOBAL_CERT_INFO[${CERT_LIST_KEY};TEMPFILE]=${CERTFILE}
+      	else
+          GLOBAL_CERT_INFO[${CERT_LIST_KEY};MAINFILE]=${CERTFILE}
+      	fi
+
+        if [ $DEBUG -eq 1 ]
         then
-            send_mail ${SENDER} ${ADMIN} "Certificate for ${HOST} \"(CN: ${COMMONNAME})\" has expired!" \
-                "The SSL certificate for ${HOST} \"(CN: ${COMMONNAME})\" has expired!"
+           echo CERT_LIST_KEY=$CERT_LIST_KEY
+           for i in CERTDATE CERTISSUER COMMONNAME SERIAL RETCODE TYPE MAINFILE TEMPFILE; do
+             echo "$i=${GLOBAL_CERT_INFO[${GLOBAL_CERT_LIST[0]};$i]}"
+           done
         fi
 
-        prints ${HOST} ${PORT} "Expired" "${CERTDATE}" "${CERTDIFF}" "${CERTISSUER}" "${COMMONNAME}" "${SERIAL}"
-        RETCODE_LOCAL=2
-
-    elif [ ${CERTDIFF} -lt ${WARNDAYS} ]
-    then
-        if [ "${ALARM}" = "TRUE" ]
-        then
-            send_mail ${SENDER} ${ADMIN} "Certificate for ${HOST} \"(CN: ${COMMONNAME})\" will expire in ${WARNDAYS}-days or less" \
-                "The SSL certificate for ${HOST} \"(CN: ${COMMONNAME})\" will expire on ${CERTDATE}"
-        fi
-        prints ${HOST} ${PORT} "Expiring" "${CERTDATE}" "${CERTDIFF}" "${CERTISSUER}" "${COMMONNAME}" "${SERIAL}"
-        RETCODE_LOCAL=1
-
-    else
-        prints ${HOST} ${PORT} "Valid" "${CERTDATE}" "${CERTDIFF}" "${CERTISSUER}" "${COMMONNAME}" "${SERIAL}"
-        RETCODE_LOCAL=0
     fi
 
-    set_returncode ${RETCODE_LOCAL}
-    MIN_DATE=$(echo ${CERTDATE} | ${AWK} '{ print $1, $2, $4 }')
-    set_summary ${RETCODE_LOCAL} ${HOST} ${PORT} "${MIN_DATE}" ${CERTDIFF}
+}
+
+### Calculate dates info and summary
+calc_dates_summary(){
+  ### Split the result into parameters, and pass the relevant pieces to date2julian
+  set -- ${CERTDATE}
+  MONTH=$(getmonth ${1})
+
+  # Convert the date to seconds, and get the diff between NOW and the expiration date
+  CERTJULIAN=$(date2julian ${MONTH#0} ${2#0} ${4})
+  CERTDIFF=$(date_diff ${NOWJULIAN} ${CERTJULIAN})
+
+  if [ ${CERTDIFF} -lt 0 ]
+  then
+      prints ${HOST} ${PORT} "Expired" "${CERTDATE}" "${CERTDIFF}" "${CERTISSUER}" "${COMMONNAME}" "${SERIAL}"
+      RETCODE_LOCAL=2
+
+  elif [ ${CERTDIFF} -lt ${WARNDAYS} ]
+  then
+      prints ${HOST} ${PORT} "Expiring" "${CERTDATE}" "${CERTDIFF}" "${CERTISSUER}" "${COMMONNAME}" "${SERIAL}"
+      RETCODE_LOCAL=1
+
+  else
+      prints ${HOST} ${PORT} "Valid" "${CERTDATE}" "${CERTDIFF}" "${CERTISSUER}" "${COMMONNAME}" "${SERIAL}"
+      RETCODE_LOCAL=0
+  fi
+
+  set_returncode ${RETCODE_LOCAL}
+  MIN_DATE=$(echo ${CERTDATE} | ${AWK} '{ print $1, $2, $4 }')
+  set_summary ${RETCODE_LOCAL} ${HOST} ${PORT} "${MIN_DATE}" ${CERTDIFF}
+
+}
+
+### process all GLOBAL_CERT_INFO and send mail if needed
+process_mail(){
+  local MESSAGE=""
+  local count_expiring=0
+    _debug "Trying send mails"
+  if [ "${ALARM}" = "TRUE" ]
+  then
+    _debug "ALARM=TRUE"
+    _debug "${#GLOBAL_CERT_LIST[*]} : ${GLOBAL_CERT_LIST[0]}"
+    if [ $AGGREGATE_MAIL -eq 1 ]
+    then
+      for i in "${GLOBAL_CERT_LIST[@]}" ; do
+       _debug "\"$i\" ;  ${GLOBAL_CERT_INFO[${i};RETCODE]}"
+       case ${GLOBAL_CERT_INFO[${i};RETCODE]}
+         in
+         2) MESSAGE="${MESSAGE}The SSL certificate for ${i} \"(CN: ${COMMONNAME})\" has expired!"$'\n'
+            count_expiring=$(($count_expiring+1))
+                   ;;
+         1)  MESSAGE="${MESSAGE}The SSL certificate for ${i} \"(CN: ${COMMONNAME})\" will expire on ${CERTDATE}"$'\n'
+         count_expiring=$(($count_expiring+1))
+                   ;;
+       esac
+      done
+      if [ $count_expiring -gt 0 ]
+      then
+        _debug "${MESSAGE}"
+        send_mail ${SENDER} ${ADMIN} "Certificates expiration report: $((${SUMMARY_EXPIRED} + ${SUMMARY_EXPIRED})) will expire in ${WARNDAYS}-days or less" "${MESSAGE}"
+      fi
+    else
+       for i in "${GLOBAL_CERT_LIST}" ; do
+        _debug "\"$i\" ;  ${GLOBAL_CERT_INFO[${i};RETCODE]}"
+        case ${GLOBAL_CERT_INFO[${i};RETCODE]}
+          in
+          2) send_mail ${SENDER} ${ADMIN} "Certificate for ${HOST} \"(CN: ${COMMONNAME})\" has expired!" \
+                    "The SSL certificate for ${i} \"(CN: ${COMMONNAME})\" has expired!"
+                    ;;
+          1)  send_mail ${SENDER} ${ADMIN} "Certificate for ${HOST} \"(CN: ${COMMONNAME})\" will expire in ${WARNDAYS}-days or less" \
+                    "The SSL certificate for ${i} \"(CN: ${COMMONNAME})\" will expire on ${CERTDATE}"
+                    ;;
+        esac
+       done
+    fi
+  fi
 }
 
 #################################
 ### Start of main program
 #################################
-while getopts abinNv:e:E:f:c:d:hk:p:s:t:qx:V option
+while getopts aAbinNv:e:E:f:c:d:hk:p:s:t:qx:V option
 do
     case "${option}"
     in
         a) ALARM="TRUE";;
+        A) AGGREGATE_MAIL=1;;
         b) NOHEADER="TRUE";;
         c) CERTFILE=${OPTARG};;
         d) CERTDIRECTORY=${OPTARG};;
         e) ADMIN=${OPTARG};;
-	E) SENDER=${OPTARG};;
+	      E) SENDER=${OPTARG};;
         f) SERVERFILE=$OPTARG;;
         h) usage
            exit 1;;
@@ -907,9 +1049,9 @@ then
         HOST=${LINE%% *}
         PORT=${LINE#* }
         IFS=" "
-        if [ "$PORT" = "FILE" ]
+        if [[ "$PORT" =~ "FILE" ]]
         then
-            check_file_status ${HOST} "FILE" "${HOST}"
+            check_file_status ${HOST} "${HOST}" ${PORT}
         else
             check_server_status "${HOST}" "${PORT}"
         fi
@@ -921,7 +1063,7 @@ then
 elif [ "${CERTFILE}" != "" ]
 then
     print_heading
-    check_file_status ${CERTFILE} "FILE" "${CERTFILE}"
+    check_file_status ${CERTFILE} "${CERTFILE}" "FILE"
     print_summary
 
 ### Check to see if the certificates in CERTDIRECTORY are about to expire
@@ -929,7 +1071,7 @@ elif [ "${CERTDIRECTORY}" != "" ] && (${FIND} -L ${CERTDIRECTORY} -type f > /dev
 then
     print_heading
     for FILE in `${FIND} -L ${CERTDIRECTORY} -type f`; do
-        check_file_status ${FILE} "FILE" "${FILE}"
+        check_file_status ${FILE} "${FILE}" "FILE"
     done
     print_summary
 
@@ -950,6 +1092,8 @@ fi
 
 rm -f ${CERT_TMP} ${ERROR_TMP}
 
+# send emails if needed
+process_mail
 ### Exit with a success indicator
 if [ "${NAGIOS}" = "TRUE" ]
 then
