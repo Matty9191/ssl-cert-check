@@ -860,7 +860,7 @@ then
 fi
 
 # Send along the servername when TLS is used
-if ${OPENSSL} s_client -h 2>&1 | grep '-servername' > /dev/null
+if ${OPENSSL} s_client -help 2>&1 | grep '-servername' > /dev/null
 then
     TLSSERVERNAME="TRUE"
 else
