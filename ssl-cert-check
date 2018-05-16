@@ -729,7 +729,7 @@ check_file_status() {
                  ${SED} 's/notAfter\=//')
 
         # Extract the issuer from the certificate
-        CERTISSUER=$(${OPENSSL} x509 -in ${CERTFILE} -issuer -noout -inform ${CERTTYPE} | \
+        CERTISSUER=$(${GREP} '^issuer=' ${CERTFILE} | \
                    ${AWK} 'BEGIN {RS="/" } $0 ~ /^O=/ { print substr($0,3,17)}')
 
         ### Grab the common name (CN) from the X.509 certificate
