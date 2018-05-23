@@ -672,7 +672,7 @@ check_server_status() {
         set_returncode 3
 
     else
-        check_file_status ${CERT_TMP} $1 $2
+        check_file_status ${CERT_TMP} $1 $2 "$3"
     fi
 }
 
@@ -688,6 +688,7 @@ check_file_status() {
     CERTFILE=${1}
     HOST=${2}
     PORT=${3}
+    EMAIL=${4}
 
     ### Check to make sure the certificate file exists
     if [ ! -r ${CERTFILE} ] || [ ! -s ${CERTFILE} ]
@@ -754,7 +755,7 @@ check_file_status() {
     then
         if [ "${ALARM}" = "TRUE" ]
         then
-            send_mail ${SENDER} ${ADMIN} "Certificate for ${HOST} \"(CN: ${COMMONNAME})\" has expired!" \
+            send_mail ${SENDER} ${ADMIN},${EMAIL} "Certificate for ${HOST} \"(CN: ${COMMONNAME})\" has expired!" \
                 "The SSL certificate for ${HOST} \"(CN: ${COMMONNAME})\" has expired!"
         fi
 
@@ -765,7 +766,7 @@ check_file_status() {
     then
         if [ "${ALARM}" = "TRUE" ]
         then
-            send_mail ${SENDER} ${ADMIN} "Certificate for ${HOST} \"(CN: ${COMMONNAME})\" will expire in ${WARNDAYS}-days or less" \
+            send_mail ${SENDER} ${ADMIN},${EMAIL} "Certificate for ${HOST} \"(CN: ${COMMONNAME})\" will expire in ${WARNDAYS}-days or less" \
                 "The SSL certificate for ${HOST} \"(CN: ${COMMONNAME})\" will expire on ${CERTDATE}"
         fi
         prints ${HOST} ${PORT} "Expiring" "${CERTDATE}" "${CERTDIFF}" "${CERTISSUER}" "${COMMONNAME}" "${SERIAL}"
@@ -903,18 +904,23 @@ then
 elif [ -f "${SERVERFILE}" ]
 then
     print_heading
-
+    EMAIL=""
     IFS=$'\n'
     for LINE in `egrep -v '(^#|^$)' ${SERVERFILE}`
     do
+        if [[ $LINE =~ '@' ]]
+        then
+            EMAIL=${LINE%?}
+            continue 
+        fi
         HOST=${LINE%% *}
         PORT=${LINE#* }
         IFS=" "
         if [ "$PORT" = "FILE" ]
         then
-            check_file_status ${HOST} "FILE" "${HOST}"
+            check_file_status ${HOST} "FILE" "${HOST}" "${EMAIL}"
         else
-            check_server_status "${HOST}" "${PORT}"
+            check_server_status "${HOST}" "${PORT}" "${EMAIL}"
         fi
     done
     IFS=${OLDIFS}
