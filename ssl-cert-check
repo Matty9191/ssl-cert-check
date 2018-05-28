@@ -581,6 +581,7 @@ usage()
     echo "  -e E-mail address : E-mail address to send expiration notices"
     echo "  -E E-mail sender  : E-mail address of the sender"
     echo "  -f cert file      : File with a list of FQDNs and ports"
+    echo "  -F options        : Options to be used on find command when using -d"
     echo "  -h                : Print this screen"
     echo "  -i                : Print the issuer of the certificate"
     echo "  -k password       : PKCS12 file password"
@@ -784,7 +785,7 @@ check_file_status() {
 #################################
 ### Start of main program
 #################################
-while getopts abinNv:e:E:f:c:d:hk:p:s:t:qx:V option
+while getopts abinNv:e:E:f:F:c:d:hk:p:s:t:qx:V option
 do
     case "${option}"
     in
@@ -795,6 +796,7 @@ do
         e) ADMIN=${OPTARG};;
 	E) SENDER=${OPTARG};;
         f) SERVERFILE=$OPTARG;;
+        F) FINDOPTIONS=$OPTARG;;
         h) usage
            exit 1;;
         i) ISSUER="TRUE";;
@@ -928,10 +930,10 @@ then
     print_summary
 
 ### Check to see if the certificates in CERTDIRECTORY are about to expire
-elif [ "${CERTDIRECTORY}" != "" ] && (${FIND} -L ${CERTDIRECTORY} -type f > /dev/null 2>&1)
+elif [ "${CERTDIRECTORY}" != "" ] && (${FIND} -L ${CERTDIRECTORY} ${FINDOPTIONS} -type f > /dev/null 2>&1)
 then
     print_heading
-    for FILE in `${FIND} -L ${CERTDIRECTORY} -type f`; do
+    for FILE in `${FIND} -L ${CERTDIRECTORY} ${FINDOPTIONS} -type f`; do
         check_file_status ${FILE} "FILE" "${FILE}"
     done
     print_summary
