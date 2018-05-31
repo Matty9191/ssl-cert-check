@@ -750,7 +750,13 @@ check_file_status() {
     CERTJULIAN=$(date2julian ${MONTH#0} ${2#0} ${4})
     CERTDIFF=$(date_diff ${NOWJULIAN} ${CERTJULIAN})
 
-    if [ ${CERTDIFF} -lt 0 ]
+    # Get the status of the cert from the index
+    if [ -f "${CERTINDEX}" ]
+    then
+        CERTSTATUS=$(${AWK} -F$'\t' "\$4 == ${SERIAL} { print \$1 }" ${CERTINDEX})
+    fi
+
+    if [ ${CERTDIFF} -lt 0 -a "${CERTSTATUS}" != R ]
     then
         if [ "${ALARM}" = "TRUE" ]
         then
@@ -761,7 +767,7 @@ check_file_status() {
         prints ${HOST} ${PORT} "Expired" "${CERTDATE}" "${CERTDIFF}" "${CERTISSUER}" "${COMMONNAME}" "${SERIAL}"
         RETCODE_LOCAL=2
 
-    elif [ ${CERTDIFF} -lt ${WARNDAYS} ]
+    elif [ ${CERTDIFF} -lt ${WARNDAYS} -a "${CERTSTATUS}" != R ]
     then
         if [ "${ALARM}" = "TRUE" ]
         then
@@ -784,7 +790,7 @@ check_file_status() {
 #################################
 ### Start of main program
 #################################
-while getopts abinNv:e:E:f:c:d:hk:p:s:t:qx:V option
+while getopts abinNv:e:E:f:c:d:hI:k:p:s:t:qx:V option
 do
     case "${option}"
     in
@@ -798,6 +804,7 @@ do
         h) usage
            exit 1;;
         i) ISSUER="TRUE";;
+        I) CERTINDEX=${OPTARG};;
         k) PKCSDBPASSWD=${OPTARG};;
         n) NAGIOS="TRUE";;
         N) NAGIOS="TRUE"
