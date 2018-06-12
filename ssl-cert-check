@@ -291,7 +291,7 @@ then
 elif [ -f /usr/sbin/sendmail ]
 then
     MAIL="/usr/sbin/sendmail"
-    MAILMODE="sendmail"    
+    MAILMODE="sendmail"
 else
     MAIL="cantfindit"
     MAILMODE="cantfindit"
@@ -690,7 +690,7 @@ check_file_status() {
     PORT=${3}
 
     ### Check to make sure the certificate file exists
-    if [ ! -r ${CERTFILE} ] || [ ! -s ${CERTFILE} ]
+    if [ ! -r "${CERTFILE}" ] || [ ! -s "${CERTFILE}" ]
     then
         echo "ERROR: The file named ${CERTFILE} is unreadable or doesn't exist"
         echo "ERROR: Please check to make sure the certificate for ${HOST}:${PORT} is valid"
@@ -703,7 +703,7 @@ check_file_status() {
     then
         # Extract the certificate from the PKCS#12 database, and
         # send the informational message to /dev/null
-        ${OPENSSL} pkcs12 -nokeys -in ${CERTFILE} \
+        ${OPENSSL} pkcs12 -nokeys -in "${CERTFILE}" \
                    -out ${CERT_TMP} -clcerts -password pass:${PKCSDBPASSWD} 2> /dev/null
 
         # Extract the expiration date from the certificate
@@ -711,8 +711,8 @@ check_file_status() {
                  ${SED} 's/notAfter\=//')
 
         # Extract the issuer from the certificate
-        CERTISSUER=$(${OPENSSL} x509 -in ${CERT_TMP} -issuer -noout | \
-                   ${AWK} 'BEGIN {RS="/" } $0 ~ /^O=/ \
+        CERTISSUER=$(${OPENSSL} x509 -in ${CERT_TMP} -issuer -noout -nameopt sep_semi_plus_space | \
+                   ${AWK} 'BEGIN {RS="; " } $0 ~ /^O=/ \
                                  { print substr($0,3,17)}')
 
         ### Grab the common name (CN) from the X.509 certificate
@@ -725,20 +725,21 @@ check_file_status() {
                    ${SED} -e 's/serial=//')
     else
         # Extract the expiration date from the ceriticate
-        CERTDATE=$(${OPENSSL} x509 -in ${CERTFILE} -enddate -noout -inform ${CERTTYPE} | \
+        CERTDATE=$(${OPENSSL} x509 -in "${CERTFILE}" -enddate -noout -inform ${CERTTYPE} | \
                  ${SED} 's/notAfter\=//')
 
         # Extract the issuer from the certificate
-        CERTISSUER=$(${OPENSSL} x509 -in ${CERTFILE} -issuer -noout -inform ${CERTTYPE} | \
-                   ${AWK} 'BEGIN {RS="/" } $0 ~ /^O=/ { print substr($0,3,17)}')
+        CERTISSUER=$(${OPENSSL} x509 -in "${CERTFILE}" -issuer -noout -inform ${CERTTYPE} \
+                    -nameopt sep_semi_plus_space | \
+                   ${AWK} 'BEGIN {RS="; " } $0 ~ /^O=/ { print substr($0,3,17)}')
 
         ### Grab the common name (CN) from the X.509 certificate
-        COMMONNAME=$(${OPENSSL} x509 -in ${CERTFILE} -subject -noout -inform ${CERTTYPE} | \
+        COMMONNAME=$(${OPENSSL} x509 -in "${CERTFILE}" -subject -noout -inform ${CERTTYPE} | \
                    ${SED} -e 's/.*CN=//' | \
                    ${SED} -e 's/\/.*//')
 
         ### Grab the serial number from the X.509 certificate
-        SERIAL=$(${OPENSSL} x509 -in ${CERTFILE} -serial -noout -inform ${CERTTYPE} | \
+        SERIAL=$(${OPENSSL} x509 -in "${CERTFILE}" -serial -noout -inform ${CERTTYPE} | \
                    ${SED} -e 's/serial=//')
     fi
 
@@ -758,7 +759,7 @@ check_file_status() {
                 "The SSL certificate for ${HOST} \"(CN: ${COMMONNAME})\" has expired!"
         fi
 
-        prints ${HOST} ${PORT} "Expired" "${CERTDATE}" "${CERTDIFF}" "${CERTISSUER}" "${COMMONNAME}" "${SERIAL}"
+        prints ${HOST} "${PORT}" "Expired" "${CERTDATE}" "${CERTDIFF}" "${CERTISSUER}" "${COMMONNAME}" "${SERIAL}"
         RETCODE_LOCAL=2
 
     elif [ ${CERTDIFF} -lt ${WARNDAYS} ]
@@ -768,17 +769,17 @@ check_file_status() {
             send_mail ${SENDER} ${ADMIN} "Certificate for ${HOST} \"(CN: ${COMMONNAME})\" will expire in ${WARNDAYS}-days or less" \
                 "The SSL certificate for ${HOST} \"(CN: ${COMMONNAME})\" will expire on ${CERTDATE}"
         fi
-        prints ${HOST} ${PORT} "Expiring" "${CERTDATE}" "${CERTDIFF}" "${CERTISSUER}" "${COMMONNAME}" "${SERIAL}"
+        prints ${HOST} "${PORT}" "Expiring" "${CERTDATE}" "${CERTDIFF}" "${CERTISSUER}" "${COMMONNAME}" "${SERIAL}"
         RETCODE_LOCAL=1
 
     else
-        prints ${HOST} ${PORT} "Valid" "${CERTDATE}" "${CERTDIFF}" "${CERTISSUER}" "${COMMONNAME}" "${SERIAL}"
+        prints ${HOST} "${PORT}" "Valid" "${CERTDATE}" "${CERTDIFF}" "${CERTISSUER}" "${COMMONNAME}" "${SERIAL}"
         RETCODE_LOCAL=0
     fi
 
     set_returncode ${RETCODE_LOCAL}
     MIN_DATE=$(echo ${CERTDATE} | ${AWK} '{ print $1, $2, $4 }')
-    set_summary ${RETCODE_LOCAL} ${HOST} ${PORT} "${MIN_DATE}" ${CERTDIFF}
+    set_summary ${RETCODE_LOCAL} ${HOST} "${PORT}" "${MIN_DATE}" ${CERTDIFF}
 }
 
 #################################
@@ -924,15 +925,15 @@ then
 elif [ "${CERTFILE}" != "" ]
 then
     print_heading
-    check_file_status ${CERTFILE} "FILE" "${CERTFILE}"
+    check_file_status "${CERTFILE}" "FILE" "${CERTFILE}"
     print_summary
 
 ### Check to see if the certificates in CERTDIRECTORY are about to expire
 elif [ "${CERTDIRECTORY}" != "" ] && (${FIND} -L ${CERTDIRECTORY} -type f > /dev/null 2>&1)
 then
     print_heading
-    for FILE in `${FIND} -L ${CERTDIRECTORY} -type f`; do
-        check_file_status ${FILE} "FILE" "${FILE}"
+    $FIND -L ${CERTDIRECTORY} -type f -print0 | while read -d $'\0' FILE; do
+        check_file_status "${FILE}" "FILE" "`basename \"${FILE}\"`"
     done
     print_summary
 
