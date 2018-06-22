@@ -754,8 +754,8 @@ check_file_status() {
     then
         if [ "${ALARM}" = "TRUE" ]
         then
-            send_mail ${SENDER} ${ADMIN} "Certificate for ${HOST} \"(CN: ${COMMONNAME})\" has expired!" \
-                "The SSL certificate for ${HOST} \"(CN: ${COMMONNAME})\" has expired!"
+            send_mail ${SENDER} ${ADMIN} "Certificate for ${HOST}:${PORT} \"(CN: ${COMMONNAME})\" has expired!" \
+                "The SSL certificate for ${HOST}:${PORT} \"(CN: ${COMMONNAME})\" has expired!"
         fi
 
         prints ${HOST} ${PORT} "Expired" "${CERTDATE}" "${CERTDIFF}" "${CERTISSUER}" "${COMMONNAME}" "${SERIAL}"
@@ -765,8 +765,8 @@ check_file_status() {
     then
         if [ "${ALARM}" = "TRUE" ]
         then
-            send_mail ${SENDER} ${ADMIN} "Certificate for ${HOST} \"(CN: ${COMMONNAME})\" will expire in ${WARNDAYS}-days or less" \
-                "The SSL certificate for ${HOST} \"(CN: ${COMMONNAME})\" will expire on ${CERTDATE}"
+            send_mail ${SENDER} ${ADMIN} "Certificate for ${HOST}:${PORT} \"(CN: ${COMMONNAME})\" will expire in ${WARNDAYS}-days or less" \
+                "The SSL certificate for ${HOST}:${PORT} \"(CN: ${COMMONNAME})\" will expire on ${CERTDATE}"
         fi
         prints ${HOST} ${PORT} "Expiring" "${CERTDATE}" "${CERTDIFF}" "${CERTISSUER}" "${COMMONNAME}" "${SERIAL}"
         RETCODE_LOCAL=1
