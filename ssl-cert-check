@@ -607,6 +607,16 @@ check_server_status() {
     then
         TLSFLAG="-starttls smtp"
 
+    elif [ "_${2}" = "_xmpp" -o "_${2}" = "_5222" ]
+    then
+        if [ "${3}" != "" ]
+        then
+            TLSFLAG="-starttls xmpp -xmpphost ${3}"
+            TLSSERVERNAME="FALSE"
+        else
+            TLSFLAG="-starttls xmpp"
+        fi
+
     elif [ "_${2}" = "_ftp" -o "_${2}" = "_21" ]
     then
         TLSFLAG="-starttls ftp"
@@ -890,9 +900,16 @@ fi
 ### If a HOST and PORT were passed on the cmdline, use those values
 if [ "${HOST}" != "" ] && [ "${PORT}" != "" ]
 then
-    print_heading
-    check_server_status "${HOST}" "${PORT}"
-    print_summary
+    if [ "${OPTS}" != "" ]
+    then
+        print_heading
+        check_server_status "${HOST}" "${PORT}" "${OPTS}"
+        print_summary
+    else
+        print_heading
+        check_server_status "${HOST}" "${PORT}"
+        print_summary
+    fi
 
 ### If a file is passed to the "-f" option on the command line, check
 ### each certificate or server / port combination in the file to see if
@@ -904,14 +921,21 @@ then
     IFS=$'\n'
     for LINE in `egrep -v '(^#|^$)' ${SERVERFILE}`
     do
-        HOST=${LINE%% *}
-        PORT=${LINE#* }
         IFS=" "
+        LINEARRY=(${LINE})
+        HOST=${LINEARRY[0]}
+        PORT=${LINEARRY[1]}
+        OPTS=${LINEARRY[2]}
         if [ "$PORT" = "FILE" ]
         then
             check_file_status ${HOST} "FILE" "${HOST}"
         else
-            check_server_status "${HOST}" "${PORT}"
+            if [ "$OPTS" != "" ]
+            then
+                check_server_status "${HOST}" "${PORT}" "${OPTS}"
+            else
+                check_server_status "${HOST}" "${PORT}"
+            fi
         fi
     done
     IFS=${OLDIFS}
