@@ -251,6 +251,9 @@ PKCSDBPASSWD=""
 # Type of certificate (PEM, DER, NET) (cmdline: -t)
 CERTTYPE="pem"
 
+# filename patterns to exclude
+EXCLUDE_PATTERNS=""
+
 # Protocol version to use (cmdline: -v)
 VERSION=""
 
@@ -593,6 +596,7 @@ usage()
     echo "  -v                : Specify a specific protocol version to use (tls, ssl2, ssl3)"
     echo "  -V                : Only print validation data"
     echo "  -x days           : Certificate expiration interval (eg. if cert_date < days)"
+    echo "  -X pattern        : exclude files matching pattern (with -d)"
     echo ""
 }
 
@@ -784,7 +788,7 @@ check_file_status() {
 #################################
 ### Start of main program
 #################################
-while getopts abinNv:e:E:f:c:d:hk:p:s:t:qx:V option
+while getopts abinNv:e:E:f:c:d:hk:p:s:t:qx:VX: option
 do
     case "${option}"
     in
@@ -809,6 +813,7 @@ do
         v) VERSION=$OPTARG;;
         V) VALIDATION="TRUE";;
         x) WARNDAYS=$OPTARG;;
+        X) EXCLUDE_PATTERNS="${EXCLUDE_PATTERNS} ${OPTARG}";;
        \?) usage
            exit 1;;
     esac
@@ -880,6 +885,11 @@ DAY=$(${DATE} "+%d")
 YEAR=$(${DATE} "+%Y")
 NOWJULIAN=$(date2julian ${MONTH#0} ${DAY#0} ${YEAR})
 
+EXCLUDES=""; # init
+for exclude in ${EXCLUDE_PATTERNS}; do
+  EXCLUDES="${EXCLUDES} ! -name ${exclude}";
+done
+
 ### Touch the files prior to using them
 if [ ! -z "${CERT_TMP}" ] && [ ! -z "${ERROR_TMP}" ]
 then
@@ -928,10 +938,10 @@ then
     print_summary
 
 ### Check to see if the certificates in CERTDIRECTORY are about to expire
-elif [ "${CERTDIRECTORY}" != "" ] && (${FIND} -L ${CERTDIRECTORY} -type f > /dev/null 2>&1)
+elif [ "${CERTDIRECTORY}" != "" ] && (${FIND} -L ${CERTDIRECTORY} -type f ${EXCLUDES} > /dev/null 2>&1)
 then
     print_heading
-    for FILE in `${FIND} -L ${CERTDIRECTORY} -type f`; do
+    for FILE in `${FIND} -L ${CERTDIRECTORY} -type f ${EXCLUDES}`; do
         check_file_status ${FILE} "FILE" "${FILE}"
     done
     print_summary
