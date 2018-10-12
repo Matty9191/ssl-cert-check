@@ -248,8 +248,17 @@ NAGIOSSUMMARY="FALSE"
 # NULL out the PKCSDBPASSWD variable for later use (cmdline: -k)
 PKCSDBPASSWD=""
 
-# Type of certificate (PEM, DER, NET) (cmdline: -t)
-CERTTYPE="pem"
+# Type of certificate (auto, PEM, DER, NET) (cmdline: -t)
+CERTTYPE_USER="auto"
+
+# the list of certificate types to autodetect when CERTTYPE_USER is auto
+CERTTYPES_TO_AUTODETECT="PEM DER NET"
+
+# the default certtype if autodetection can't figure it out
+CERTTYPE_DEFAULT="PEM"
+
+# filename patterns to exclude
+EXCLUDE_PATTERNS=""
 
 # Protocol version to use (cmdline: -v)
 VERSION=""
@@ -593,6 +602,7 @@ usage()
     echo "  -v                : Specify a specific protocol version to use (tls, ssl2, ssl3)"
     echo "  -V                : Only print validation data"
     echo "  -x days           : Certificate expiration interval (eg. if cert_date < days)"
+    echo "  -X pattern        : exclude files matching pattern (with -d)"
     echo ""
 }
 
@@ -724,6 +734,20 @@ check_file_status() {
         SERIAL=$(${OPENSSL} x509 -in ${CERT_TMP} -serial -noout | \
                    ${SED} -e 's/serial=//')
     else
+        # figure out the CERTTYPE.  If explicitly provided by user,
+        # use that.  If the special value "auto", then autodetect.
+        if [ "${CERTTYPE_USER}" = "auto" ]; then
+          CERTTYPE=${CERTTYPE_DEFAULT}
+          for CERTTYPE_TRY in ${CERTTYPES_TO_AUTODETECT}; do
+            if ${OPENSSL} x509 -in ${CERTFILE} -enddate -noout -inform ${CERTTYPE_TRY} >/dev/null 2>&1; then
+              CERTTYPE=${CERTTYPE_TRY}
+              break
+            fi
+          done
+        else
+          CERTTYPE="${CERTTYPE_USER}"
+        fi
+
         # Extract the expiration date from the ceriticate
         CERTDATE=$(${OPENSSL} x509 -in ${CERTFILE} -enddate -noout -inform ${CERTTYPE} | \
                  ${SED} 's/notAfter\=//')
@@ -784,7 +808,7 @@ check_file_status() {
 #################################
 ### Start of main program
 #################################
-while getopts abinNv:e:E:f:c:d:hk:p:s:t:qx:V option
+while getopts abinNv:e:E:f:c:d:hk:p:s:t:qx:VX: option
 do
     case "${option}"
     in
@@ -804,11 +828,12 @@ do
            NAGIOSSUMMARY="TRUE";;
         p) PORT=$OPTARG;;
         s) HOST=$OPTARG;;
-        t) CERTTYPE=$OPTARG;;
+        t) CERTTYPE_USER=$OPTARG;;
         q) QUIET="TRUE";;
         v) VERSION=$OPTARG;;
         V) VALIDATION="TRUE";;
         x) WARNDAYS=$OPTARG;;
+        X) EXCLUDE_PATTERNS="${EXCLUDE_PATTERNS} ${OPTARG}";;
        \?) usage
            exit 1;;
     esac
@@ -880,6 +905,11 @@ DAY=$(${DATE} "+%d")
 YEAR=$(${DATE} "+%Y")
 NOWJULIAN=$(date2julian ${MONTH#0} ${DAY#0} ${YEAR})
 
+EXCLUDES=""; # init
+for exclude in ${EXCLUDE_PATTERNS}; do
+  EXCLUDES="${EXCLUDES} ! -name ${exclude}";
+done
+
 ### Touch the files prior to using them
 if [ ! -z "${CERT_TMP}" ] && [ ! -z "${ERROR_TMP}" ]
 then
@@ -928,10 +958,10 @@ then
     print_summary
 
 ### Check to see if the certificates in CERTDIRECTORY are about to expire
-elif [ "${CERTDIRECTORY}" != "" ] && (${FIND} -L ${CERTDIRECTORY} -type f > /dev/null 2>&1)
+elif [ "${CERTDIRECTORY}" != "" ] && (${FIND} -L ${CERTDIRECTORY} -type f ${EXCLUDES} > /dev/null 2>&1)
 then
     print_heading
-    for FILE in `${FIND} -L ${CERTDIRECTORY} -type f`; do
+    for FILE in `${FIND} -L ${CERTDIRECTORY} -type f ${EXCLUDES}`; do
         check_file_status ${FILE} "FILE" "${FILE}"
     done
     print_summary
