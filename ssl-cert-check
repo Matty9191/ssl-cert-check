@@ -248,8 +248,8 @@ NAGIOSSUMMARY="FALSE"
 # NULL out the PKCSDBPASSWD variable for later use (cmdline: -k)
 PKCSDBPASSWD=""
 
-# Type of certificate (PEM, DER, NET) (cmdline: -t)
-CERTTYPE="pem"
+# Type of certificate (auto, PEM, DER, NET) (cmdline: -t)
+CERTTYPE_USER="auto"
 
 # Protocol version to use (cmdline: -v)
 VERSION=""
@@ -724,6 +724,20 @@ check_file_status() {
         SERIAL=$(${OPENSSL} x509 -in ${CERT_TMP} -serial -noout | \
                    ${SED} -e 's/serial=//')
     else
+        # figure out the CERTTYPE.  If explicitly provided by user,
+        # use that.  If the special value "auto", then autodetect.
+        if [ "${CERTTYPE_USER}" = "auto" ]; then
+          CERTTYPE=PEM; # default
+          for CERTTYPE_TRY in DER NET PEM; do
+            if ${OPENSSL} x509 -in ${CERTFILE} -enddate -noout -inform ${CERTTYPE_TRY} >/dev/null 2>&1; then
+              CERTTYPE=${CERTTYPE_TRY}
+              break
+            fi
+          done
+        else
+          CERTTYPE="${CERTTYPE_USER}"
+        fi
+
         # Extract the expiration date from the ceriticate
         CERTDATE=$(${OPENSSL} x509 -in ${CERTFILE} -enddate -noout -inform ${CERTTYPE} | \
                  ${SED} 's/notAfter\=//')
@@ -804,7 +818,7 @@ do
            NAGIOSSUMMARY="TRUE";;
         p) PORT=$OPTARG;;
         s) HOST=$OPTARG;;
-        t) CERTTYPE=$OPTARG;;
+        t) CERTTYPE_USER=$OPTARG;;
         q) QUIET="TRUE";;
         v) VERSION=$OPTARG;;
         V) VALIDATION="TRUE";;
