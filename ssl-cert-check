@@ -251,6 +251,12 @@ PKCSDBPASSWD=""
 # Type of certificate (auto, PEM, DER, NET) (cmdline: -t)
 CERTTYPE_USER="auto"
 
+# the list of certificate types to autodetect when CERTTYPE_USER is auto
+CERTTYPES_TO_AUTODETECT="PEM DER NET"
+
+# the default certtype if autodetection can't figure it out
+CERTTYPE_DEFAULT="PEM"
+
 # Protocol version to use (cmdline: -v)
 VERSION=""
 
@@ -727,8 +733,8 @@ check_file_status() {
         # figure out the CERTTYPE.  If explicitly provided by user,
         # use that.  If the special value "auto", then autodetect.
         if [ "${CERTTYPE_USER}" = "auto" ]; then
-          CERTTYPE=PEM; # default
-          for CERTTYPE_TRY in DER NET PEM; do
+          CERTTYPE=${CERTTYPE_DEFAULT}
+          for CERTTYPE_TRY in ${CERTTYPES_TO_AUTODETECT}; do
             if ${OPENSSL} x509 -in ${CERTFILE} -enddate -noout -inform ${CERTTYPE_TRY} >/dev/null 2>&1; then
               CERTTYPE=${CERTTYPE_TRY}
               break
