@@ -251,7 +251,7 @@ PKCSDBPASSWD=""
 # Type of certificate (PEM, DER, NET) (cmdline: -t)
 CERTTYPE="pem"
 
-# filename patterns to exclude
+# filename patterns to exclude (cmdline: -X)
 EXCLUDE_PATTERNS=""
 
 # Protocol version to use (cmdline: -v)
