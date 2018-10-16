@@ -701,10 +701,15 @@ check_file_status() {
     ### Grab the expiration date from the X.509 certificate
     if [ "${PKCSDBPASSWD}" != "" ]
     then
+        # prepend pass: if necessary, for ssl-cert-check backwards compatibility
+        if [ "${PKCSDBPASSWD}" != "stdin" ] && ! echo "${PKCSDBPASSWD}" | grep -q :; then
+                   PKCSDBPASSWD="pass:${PKCSDBPASSWD}"
+        fi
+
         # Extract the certificate from the PKCS#12 database, and
         # send the informational message to /dev/null
         ${OPENSSL} pkcs12 -nokeys -in ${CERTFILE} \
-                   -out ${CERT_TMP} -clcerts -password pass:${PKCSDBPASSWD} 2> /dev/null
+                   -out ${CERT_TMP} -clcerts -password ${PKCSDBPASSWD} 2> /dev/null
 
         # Extract the expiration date from the certificate
         CERTDATE=$(${OPENSSL} x509 -in ${CERT_TMP} -enddate -noout | \
