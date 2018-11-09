@@ -572,7 +572,7 @@ set_summary()
 usage()
 {
     echo "Usage: $0 [ -e email address ] [-E sender email address] [ -x days ] [-q] [-a] [-b] [-h] [-i] [-n] [-N] [-v]"
-    echo "       { [ -s common_name ] && [ -p port] } || { [ -f cert_file ] } || { [ -c cert file ] } || { [ -d cert dir ] }"
+    echo "       { [ -s common_name ] && [ -p port] } || { [ -f cert_file ] } || { [ -c cert file ] } || { [ -d cert dir ] } [ -S s_client custom options ]"
     echo ""
     echo "  -a                : Send a warning message through E-mail"
     echo "  -b                : Will not print header"
@@ -588,6 +588,7 @@ usage()
     echo "  -N                : Run as a Nagios plugin and output one line summary (implies -n, requires -f or -d)"
     echo "  -p port           : Port to connect to (interactive mode)"
     echo "  -s commmon name   : Server to connect to (interactive mode)"
+    echo "  -S options        : Custom options for s_client"
     echo "  -t type           : Specify the certificate type"
     echo "  -q                : Don't print anything on the console"
     echo "  -v                : Specify a specific protocol version to use (tls, ssl2, ssl3)"
@@ -639,7 +640,7 @@ check_server_status() {
          TLSFLAG="${TLSFLAG} -servername $1"
     fi
 
-    echo "" | ${OPENSSL} s_client -crlf ${VER} -connect ${1}:${2} ${TLSFLAG} 2> ${ERROR_TMP} 1> ${CERT_TMP}
+    echo "" | ${OPENSSL} s_client -crlf ${VER} -connect ${1}:${2} ${TLSFLAG} ${SCLIENTOPTS} 2> ${ERROR_TMP} 1> ${CERT_TMP}
 
     if ${GREP} -i "Connection refused" ${ERROR_TMP} > /dev/null
     then
@@ -784,7 +785,7 @@ check_file_status() {
 #################################
 ### Start of main program
 #################################
-while getopts abinNv:e:E:f:c:d:hk:p:s:t:qx:V option
+while getopts abinNv:e:E:f:c:d:hk:p:s:S:t:qx:V option
 do
     case "${option}"
     in
@@ -804,6 +805,7 @@ do
            NAGIOSSUMMARY="TRUE";;
         p) PORT=$OPTARG;;
         s) HOST=$OPTARG;;
+        S) SCLIENTOPTS=$OPTARG;;
         t) CERTTYPE=$OPTARG;;
         q) QUIET="TRUE";;
         v) VERSION=$OPTARG;;
