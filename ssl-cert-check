@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-PROGRAMVERSION=4.1
+PROGRAMVERSION=4.3
 #
 # Program: SSL Certificate Check <ssl-cert-check>
 #
@@ -10,6 +10,9 @@ PROGRAMVERSION=4.1
 # Author: Matty < matty91 at gmail dot com >
 #
 # Revision History:
+#
+# Version 4.3
+#  - Fixed a typo
 #
 # Version 4.2
 #  - Change CERTDAYS to CERTDIFF in the e-mail subject. 
