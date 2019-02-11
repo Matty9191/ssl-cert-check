@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-PROGRAMVERSION=4.0
+PROGRAMVERSION=4.1
 #
 # Program: SSL Certificate Check <ssl-cert-check>
 #
@@ -11,7 +11,10 @@ PROGRAMVERSION=4.0
 #
 # Revision History:
 #
-# Version 4.00
+# Version 4.1
+#  - Fix usage output
+#
+# Version 4.0
 #  - Updated the script syntax to align with UNIX shell programming
 #  - Check for DNS resolution failures
 #  - First round of updates to make shellcheck happy
@@ -568,10 +571,11 @@ usage()
     echo "  -N                : Run as a Nagios plugin and output one line summary (implies -n, requires -f or -d)"
     echo "  -p port           : Port to connect to (interactive mode)"
     echo "  -s commmon name   : Server to connect to (interactive mode)"
+    echo "  -S                : Print validation information"
     echo "  -t type           : Specify the certificate type"
     echo "  -q                : Don't print anything on the console"
     echo "  -v                : Specify a specific protocol version to use (tls, ssl2, ssl3)"
-    echo "  -V                : Only print validation data"
+    echo "  -V                : Print version information"
     echo "  -x days           : Certificate expiration interval (eg. if cert_date < days)"
     echo ""
 }
@@ -761,7 +765,7 @@ do
         t) CERTTYPE=$OPTARG;;
         q) QUIET="TRUE";;
         v) VERSION=$OPTARG;;
-        V) echo "$0 version: ${PROGRAMVERSION}"
+        V) echo "${PROGRAMVERSION}"
            exit 0
 	   ;;
         x) WARNDAYS=$OPTARG;;
