@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-PROGRAMVERSION=4.6
+PROGRAMVERSION=4.7
 #
 # Program: SSL Certificate Check <ssl-cert-check>
 #
@@ -9,7 +9,13 @@ PROGRAMVERSION=4.6
 #
 # Author: Matty < matty91 at gmail dot com >
 #
+# Last Updated: 02-11-2019
+#
 # Revision History:
+#
+# Version 4.7
+#  - Revert SENDER to ""
+#  - More shellcheck cleanup
 #
 # Version 4.6
 #  - Fixed programming logic error
@@ -207,8 +213,6 @@ PROGRAMVERSION=4.6
 #  Version 1.0
 #      Initial Release
 #
-# Last Updated: 12-12-2016
-#
 # Purpose:
 #  ssl-cert-check checks to see if a digital certificate in X.509 format
 #  has expired. ssl-cert-check can be run in interactive and batch mode,
@@ -256,7 +260,7 @@ export PATH
 ADMIN="root"
 
 # Email sender address for alarm notifications
-SENDER="postmaster@localhost.localdomain"
+SENDER=""
 
 # Number of days in the warning threshhold (cmdline: -x)
 WARNDAYS=30
@@ -533,7 +537,7 @@ print_summary()
 #############################################################
 set_returncode()
 {
-    if [ ${RETCODE} -lt ${1} ]; then
+    if [ "${RETCODE}" -lt "${1}" ]; then
         RETCODE="${1}"
     fi
 }
@@ -549,19 +553,19 @@ set_returncode()
 ########################################################################
 set_summary()
 {
-    if [ ${1} -eq 0 ]; then
+    if [ "${1}" -eq 0 ]; then
         SUMMARY_VALID=$((SUMMARY_VALID+1))
-    elif [ ${1} -eq 1 ]; then
+    elif [ "${1}" -eq 1 ]; then
         SUMMARY_WILL_EXPIRE=$((SUMMARY_WILL_EXPIRE+1))
     else
         SUMMARY_EXPIRED=$((SUMMARY_EXPIRED+1))
     fi
 
-    if [ ${5} -lt ${SUMMARY_MIN_DIFF} ] || [ ${SUMMARY_MIN_DIFF} -eq 0 ]; then
-        SUMMARY_MIN_DATE=${4}
-        SUMMARY_MIN_DIFF=${5}
-        SUMMARY_MIN_HOST=${2}
-        SUMMARY_MIN_PORT=${3}
+    if [ "${5}" -lt "${SUMMARY_MIN_DIFF}" ] || [ "${SUMMARY_MIN_DIFF}" -eq 0 ]; then
+        SUMMARY_MIN_DATE="${4}"
+        SUMMARY_MIN_DIFF="${5}"
+        SUMMARY_MIN_HOST="${2}"
+        SUMMARY_MIN_PORT="${3}"
     fi
 }
 
@@ -608,15 +612,15 @@ usage()
 ##########################################################################
 check_server_status() {
 
-    if [ "_${2}" = "_smtp" -o "_${2}" = "_25" ]; then
+    if [ "_${2}" = "_smtp" ] || [ "_${2}" = "_25" ]; then
         TLSFLAG="-starttls smtp"
-    elif [ "_${2}" = "_ftp" -o "_${2}" = "_21" ]; then
+    elif [ "_${2}" = "_ftp" ] || [ "_${2}" = "_21" ]; then
         TLSFLAG="-starttls ftp"
-    elif [ "_${2}" = "_pop3" -o "_${2}" = "_110" ]; then
+    elif [ "_${2}" = "_pop3" ] || [ "_${2}" = "_110" ]; then
         TLSFLAG="-starttls pop3"
-    elif [ "_${2}" = "_imap" -o "_${2}" = "_143" ]; then
+    elif [ "_${2}" = "_imap" ] || [ "_${2}" = "_143" ]; then
         TLSFLAG="-starttls imap"
-    elif [ "_${2}" = "_submission" -o "_${2}" = "_587" ]; then
+    elif [ "_${2}" = "_submission" ] || [ "_${2}" = "_587" ]; then
         TLSFLAG="-starttls smtp -port ${2}"
     else
         TLSFLAG=""
@@ -632,29 +636,29 @@ check_server_status() {
 
     echo "" | "${OPENSSL}" s_client -crlf ${VER} -connect ${1}:${2} ${TLSFLAG} 2> "${ERROR_TMP}" 1> "${CERT_TMP}"
 
-    if ${GREP} -i "Connection refused" ${ERROR_TMP} > /dev/null; then
-        prints ${1} ${2} "Connection refused" "Unknown"
+    if "${GREP}" -i "Connection refused" "${ERROR_TMP}" > /dev/null; then
+        prints "${1}" "${2}" "Connection refused" "Unknown"
         set_returncode 3
-    elif ${GREP} -i "No route to host" ${ERROR_TMP} > /dev/null; then
-        prints ${1} ${2} "No route to host" "Unknown"
+    elif "${GREP}" -i "No route to host" "${ERROR_TMP}" > /dev/null; then
+        prints "${1}" "${2}" "No route to host" "Unknown"
         set_returncode 3
-    elif ${GREP} -i "gethostbyname failure" ${ERROR_TMP} > /dev/null; then
-        prints ${1} ${2} "Cannot resolve domain" "Unknown"
+    elif "${GREP}" -i "gethostbyname failure" "${ERROR_TMP}" > /dev/null; then
+        prints "${1}" "${2}" "Cannot resolve domain" "Unknown"
         set_returncode 3
-    elif ${GREP} -i "Operation timed out" ${ERROR_TMP} > /dev/null; then
-        prints ${1} ${2} "Operation timed out" "Unknown"
+    elif "${GREP}" -i "Operation timed out" "${ERROR_TMP}" > /dev/null; then
+        prints "${1}" "${2}" "Operation timed out" "Unknown"
         set_returncode 3
-    elif ${GREP} -i "ssl handshake failure" ${ERROR_TMP} > /dev/null; then
-        prints ${1} ${2} "SSL handshake failed" "Unknown"
+    elif "${GREP}" -i "ssl handshake failure" "${ERROR_TMP}" > /dev/null; then
+        prints "${1}" "${2}" "SSL handshake failed" "Unknown"
         set_returncode 3
-    elif ${GREP} -i "connect: Connection timed out" ${ERROR_TMP} > /dev/null; then
-        prints ${1} ${2} "Connection timed out" "Unknown"
+    elif "${GREP}" -i "connect: Connection timed out" "${ERROR_TMP}" > /dev/null; then
+        prints "${1}" "${2}" "Connection timed out" "Unknown"
         set_returncode 3
-    elif ${GREP} -i "Name or service not known" ${ERROR_TMP} > /dev/null; then
-        prints ${1} ${2} "Unable to resolve the DNS name ${1}" "Unknown"
+    elif "${GREP}" -i "Name or service not known" "${ERROR_TMP}" > /dev/null; then
+        prints "${1}" "${2}" "Unable to resolve the DNS name ${1}" "Unknown"
         set_returncode 3
     else
-        check_file_status ${CERT_TMP} $1 $2
+        check_file_status "${CERT_TMP}" "${1}" "${2}"
     fi
 }
 
@@ -672,7 +676,7 @@ check_file_status() {
     PORT="${3}"
 
     ### Check to make sure the certificate file exists
-    if [ ! -r ${CERTFILE} ] || [ ! -s ${CERTFILE} ]; then
+    if [ ! -r "${CERTFILE}" ] || [ ! -s "${CERTFILE}" ]; then
         echo "ERROR: The file named ${CERTFILE} is unreadable or doesn't exist"
         echo "ERROR: Please check to make sure the certificate for ${HOST}:${PORT} is valid"
         set_returncode 3
@@ -683,26 +687,26 @@ check_file_status() {
     if [ "${PKCSDBPASSWD}" != "" ]; then
         # Extract the certificate from the PKCS#12 database, and
         # send the informational message to /dev/null
-        ${OPENSSL} pkcs12 -nokeys -in ${CERTFILE} \
-                   -out ${CERT_TMP} -clcerts -password pass:${PKCSDBPASSWD} 2> /dev/null
+        "${OPENSSL}" pkcs12 -nokeys -in "${CERTFILE}" \
+                   -out "${CERT_TMP}" -clcerts -password pass:"${PKCSDBPASSWD}" 2> /dev/null
 
         # Extract the expiration date from the certificate
-        CERTDATE=$(${OPENSSL} x509 -in ${CERT_TMP} -enddate -noout | \
-                 ${SED} 's/notAfter\=//')
+        CERTDATE=$("${OPENSSL}" x509 -in "${CERT_TMP}" -enddate -noout | \
+                   "${SED}" 's/notAfter\=//')
 
         # Extract the issuer from the certificate
-        CERTISSUER=$(${OPENSSL} x509 -in ${CERT_TMP} -issuer -noout | \
-                   ${AWK} 'BEGIN {RS="/" } $0 ~ /^O=/ \
+        CERTISSUER=$("${OPENSSL}" x509 -in "${CERT_TMP}" -issuer -noout | \
+                   "${AWK}" 'BEGIN {RS="/" } $0 ~ /^O=/ \
                                  { print substr($0,3,17)}')
 
         ### Grab the common name (CN) from the X.509 certificate
-        COMMONNAME=$(${OPENSSL} x509 -in ${CERT_TMP} -subject -noout | \
-                   ${SED} -e 's/.*CN=//' | \
-                   ${SED} -e 's/\/.*//')
+        COMMONNAME=$("${OPENSSL}" x509 -in "${CERT_TMP}" -subject -noout | \
+                   "${SED}" -e 's/.*CN=//' | \
+                   "${SED}" -e 's/\/.*//')
 
         ### Grab the serial number from the X.509 certificate
-        SERIAL=$(${OPENSSL} x509 -in ${CERT_TMP} -serial -noout | \
-                   ${SED} -e 's/serial=//')
+        SERIAL=$("${OPENSSL}" x509 -in "${CERT_TMP}" -serial -noout | \
+                 "${SED}" -e 's/serial=//')
     else
         # Extract the expiration date from the ceriticate
         CERTDATE=$(${OPENSSL} x509 -in ${CERTFILE} -enddate -noout -inform ${CERTTYPE} | \
