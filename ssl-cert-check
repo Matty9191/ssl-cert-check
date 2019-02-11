@@ -11,6 +11,9 @@ PROGRAMVERSION=4.1
 #
 # Revision History:
 #
+# Version 4.2
+#  - Change CERTDAYS to CERTDIFF in the e-mail subject. 
+#
 # Version 4.1
 #  - Fix usage output
 #
@@ -723,7 +726,7 @@ check_file_status() {
 
     elif [ ${CERTDIFF} -lt ${WARNDAYS} ]; then
         if [ "${ALARM}" = "TRUE" ]; then
-            send_mail ${SENDER} ${ADMIN} "Certificate for ${HOST} \"(CN: ${COMMONNAME})\" will expire in ${WARNDAYS}-days or less" \
+            send_mail ${SENDER} ${ADMIN} "Certificate for ${HOST} \"(CN: ${COMMONNAME})\" will expire in ${CERTDIFF}-days or less" \
                 "The SSL certificate for ${HOST} \"(CN: ${COMMONNAME})\" will expire on ${CERTDATE}"
         fi
         prints "${HOST}" "${PORT}" "Expiring" "${CERTDATE}" "${CERTDIFF}" "${CERTISSUER}" "${COMMONNAME}" "${SERIAL}"
