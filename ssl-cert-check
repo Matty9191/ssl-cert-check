@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-PROGRAMVERSION=4.3
+PROGRAMVERSION=4.5
 #
 # Program: SSL Certificate Check <ssl-cert-check>
 #
@@ -11,8 +11,17 @@ PROGRAMVERSION=4.3
 #
 # Revision History:
 #
+# Version 4.5
+#  - Re-work mailx support for FreeBSD
+#  - More shellcheck fixes
+#
+# Version 4.4
+#  - Use command -v instead of which utility to satisfy shellcheck.
+#  - Fix unquoted MAIL and MAILMODE variables in help output
+#  - More shellcheck fixes
+#
 # Version 4.3
-#  - Fixed a typo
+#  - Fixed a typo in the program version
 #
 # Version 4.2
 #  - Change CERTDAYS to CERTDIFF in the e-mail subject. 
@@ -274,16 +283,19 @@ VERSION=""
 DEBUG=0
 
 # Location of system binaries
-AWK=$(which awk)
-DATE=$(which date)
-GREP=$(which grep)
-OPENSSL=$(which openssl)
+AWK=$(command -v awk)
+DATE=$(command -v date)
+GREP=$(command -v grep)
+OPENSSL=$(command -v openssl)
 PRINTF=$(which printf)
-SED=$(which sed)
-MKTEMP=$(which mktemp)
-FIND=$(which find)
+SED=$(command -v sed)
+MKTEMP=$(command -v mktemp)
+FIND=$(command -v find)
 
 # Try to find a mail client
+if [ -f /usr/bin/mailx ]; then
+    MAIL="/usr/bin/mailx"
+    MAILMODE="mailx"
 if [ -f /bin/mail ]; then
     MAIL="/bin/mail"
     MAILMODE="mail"
@@ -299,9 +311,6 @@ elif [ -f /usr/sbin/mail ]; then
 elif [ -f /usr/sbin/sendmail ]; then
     MAIL="/usr/sbin/sendmail"
     MAILMODE="sendmail"    
-elif [ -f /usr/bin/mailx ]; then
-    MAIL="/usr/bin/mailx"
-    MAILMODE="mailx"
 else
     MAIL="cantfindit"
     MAILMODE="cantfindit"
@@ -333,24 +342,24 @@ umask 077
 #####################################################
 send_mail() {
 
-    FROM=${1}
-    TO=${2}
-    SUBJECT=${3}
-    MSG=${4}
+    FROM="${1}"
+    TO="${2}"
+    SUBJECT="${3}"
+    MSG="${4}"
 
     case "${MAILMODE}" in
         "mail")
-            echo "$MSG" | ${MAIL} -r $FROM -s "$SUBJECT" $TO
+            echo "$MSG" | "${MAIL}" -r "$FROM" -s "$SUBJECT" "$TO"
             ;;
         "mailx")
-            echo "$MSG" | ${MAIL} $FROM -s "$SUBJECT" $TO
+            echo "$MSG" | "${MAIL}" "$FROM" -s "$SUBJECT" "$TO"
             ;;
         "sendmail")
-            (echo "Subject:$SUBJECT" && echo "TO:$TO" && echo "FROM:$FROM" && echo "$MSG") | ${MAIL} $TO
+            (echo "Subject:$SUBJECT" && echo "TO:$TO" && echo "FROM:$FROM" && echo "$MSG") | "${MAIL}" "$TO"
             ;;
         "*")
             echo "ERROR: You enabled automated alerts, but the mail binary could not be found."
-            echo "FIX: Please modify the ${MAIL} and ${$MAILMODE} variable in the program header."
+            echo "FIX: Please modify the \${MAIL} and \${MAILMODE} variable in the program header."
             exit 1
             ;;
     esac
@@ -442,7 +451,7 @@ prints()
     fi
 
     if [ "${QUIET}" != "TRUE" ] && [ "${ISSUER}" = "TRUE" ] && [ "${VALIDATION}" != "TRUE" ]; then
-        MIN_DATE=$(echo $4 | ${AWK} '{ print $1, $2, $4 }')
+        MIN_DATE=$(echo "$4" | ${AWK} '{ print $1, $2, $4 }')
         if [ "${NAGIOS}" == "TRUE" ]; then
             ${PRINTF} "%-35s %-17s %-8s %-11s %-4s %-30s\n" "$1:$2" "$6" "$3" "$MIN_DATE" \|days="$5"
         else
@@ -522,7 +531,7 @@ print_summary()
 set_returncode()
 {
     if [ ${RETCODE} -lt ${1} ]; then
-        RETCODE=${1}
+        RETCODE="${1}"
     fi
 }
 
@@ -742,7 +751,7 @@ check_file_status() {
 
     set_returncode "${RETCODE_LOCAL}"
     MIN_DATE=$(echo "${CERTDATE}" | "${AWK}" '{ print $1, $2, $4 }')
-    set_summary ${RETCODE_LOCAL} ${HOST} ${PORT} "${MIN_DATE}" ${CERTDIFF}
+    set_summary "${RETCODE_LOCAL}" "${HOST}" "${PORT}" "${MIN_DATE}" ${CERTDIFF}
 }
 
 #################################
