@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-PROGRAMVERSION=4.8
+PROGRAMVERSION=4.9
 #
 # Program: SSL Certificate Check <ssl-cert-check>
 #
@@ -12,6 +12,10 @@ PROGRAMVERSION=4.8
 # Last Updated: 02-11-2019
 #
 # Revision History:
+#
+# Version 4.9
+#  - Add a signal handler to call the cleanup funtion
+#    if the script doesn't exit() cleanly -- Timothe Litt
 #
 # Version 4.8
 #  - More mail client fixes
@@ -256,6 +260,9 @@ PROGRAMVERSION=4.8
 #   Please refer to the following site for documentation and examples:
 #   http://prefetch.net/articles/checkcertificate.html
 
+# Cleanup temp files if they exist
+trap cleanup EXIT INT TERM QUIT
+
 PATH=/bin:/usr/bin:/sbin:/usr/sbin:/usr/local/bin:/usr/local/ssl/bin:/usr/sfw/bin
 export PATH
 
@@ -340,6 +347,21 @@ SUMMARY_MIN_PORT=
 
 # Set the default umask to be somewhat restrictive
 umask 077
+
+
+#####################################################
+# Purpose: Remove temporary files if the script doesn't
+#          exit() cleanly
+#####################################################
+cleanup() {
+    if [ -f "${CERT_TMP}" ]; then
+        rm -f "${CERT_TMP}"
+    fi
+
+    if [ -f "${ERROR_TMP}" ]; then
+	rm -f "${ERROR_TMP}"
+    fi
+}
 
 
 #####################################################
@@ -872,7 +894,6 @@ if [ "${HOST}" != "" ] && [ "${PORT}" != "" ]; then
     print_heading
     check_server_status "${HOST}" "${PORT}"
     print_summary
-
 ### If a file is passed to the "-f" option on the command line, check
 ### each certificate or server / port combination in the file to see if
 ### they are about to expire
@@ -893,7 +914,6 @@ elif [ -f "${SERVERFILE}" ]; then
     done
     IFS="${OLDIFS}"
     print_summary
-
 ### Check to see if the certificate in CERTFILE is about to expire
 elif [ "${CERTFILE}" != "" ]; then
     print_heading
@@ -907,22 +927,11 @@ elif [ "${CERTDIRECTORY}" != "" ] && ("${FIND}" -L "${CERTDIRECTORY}" -type f > 
         check_file_status "${FILE}" "FILE" "${FILE}"
     done
     print_summary
-
 ### There was an error, so print a detailed usage message and exit
 else
     usage
     exit 1
 fi
-
-### Remove the temporary files
-if [ $DEBUG == 1 ]; then
-    echo "DEBUG: Certificate temporary file:"
-    cat "${CERT_TMP}"
-    echo "DEBUG: Runtime information file:"
-    cat "${ERROR_TMP}"
-fi
-
-rm -f "${CERT_TMP}" "${ERROR_TMP}"
 
 ### Exit with a success indicator
 if [ "${NAGIOS}" = "TRUE" ]; then
