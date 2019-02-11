@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-PROGRAMVERSION=4.5
+PROGRAMVERSION=4.6
 #
 # Program: SSL Certificate Check <ssl-cert-check>
 #
@@ -10,6 +10,9 @@ PROGRAMVERSION=4.5
 # Author: Matty < matty91 at gmail dot com >
 #
 # Revision History:
+#
+# Version 4.6
+#  - Fixed programming logic error
 #
 # Version 4.5
 #  - Re-work mailx support for FreeBSD
@@ -296,7 +299,7 @@ FIND=$(command -v find)
 if [ -f /usr/bin/mailx ]; then
     MAIL="/usr/bin/mailx"
     MAILMODE="mailx"
-if [ -f /bin/mail ]; then
+elif [ -f /bin/mail ]; then
     MAIL="/bin/mail"
     MAILMODE="mail"
 elif [ -f /usr/bin/mail ]; then
