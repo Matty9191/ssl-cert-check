@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-PROGRAMVERSION=4.9
+PROGRAMVERSION=4.10
 #
 # Program: SSL Certificate Check <ssl-cert-check>
 #
@@ -9,9 +9,18 @@ PROGRAMVERSION=4.9
 #
 # Author: Matty < matty91 at gmail dot com >
 #
-# Last Updated: 02-11-2019
+# Last Updated: 02-12-2019
 #
 # Revision History:
+#
+# Version 4.10
+#  - Replace tabs with spaces
+#  - More shllcheck cleanup work
+#  - Remove unused DEBUG variable
+#  - Fixed an innocuous whitespace bug in TLSFLAG variable creation
+#  - Set the default TLS version to 1.1 (can be overridden with -v)
+#  - Switched openssl CLI options to use an array. The reasons why
+#    are documented here: http://mywiki.wooledge.org/BashFAQ/050
 #
 # Version 4.9
 #  - Add a signal handler to call the cleanup funtion
@@ -294,10 +303,7 @@ PKCSDBPASSWD=""
 CERTTYPE="pem"
 
 # Protocol version to use (cmdline: -v)
-VERSION=""
-
-# Enable debugging
-DEBUG=0
+VERSION="-tls1_1"
 
 # Location of system binaries
 AWK=$(command -v awk)
@@ -359,7 +365,7 @@ cleanup() {
     fi
 
     if [ -f "${ERROR_TMP}" ]; then
-	rm -f "${ERROR_TMP}"
+     rm -f "${ERROR_TMP}"
     fi
 }
 
@@ -412,16 +418,16 @@ date2julian() {
     if [ "${1}" != "" ] && [ "${2}" != "" ] && [ "${3}" != "" ]; then
         ## Since leap years add aday at the end of February,
         ## calculations are done from 1 March 0000 (a fictional year)
-        d2j_tmpmonth=$((12 * ${3} + ${1} - 3))
+        d2j_tmpmonth=$((12 * $3 + $1 - 3))
 
         ## If it is not yet March, the year is changed to the previous year
-        d2j_tmpyear=$(( ${d2j_tmpmonth} / 12))
+        d2j_tmpyear=$(( d2j_tmpmonth / 12))
 
         ## The number of days from 1 March 0000 is calculated
         ## and the number of days from 1 Jan. 4713BC is added
-        echo $(( (734 * ${d2j_tmpmonth} + 15) / 24
-                 - 2 * ${d2j_tmpyear} + ${d2j_tmpyear}/4
-                 - ${d2j_tmpyear}/100 + ${d2j_tmpyear}/400 + $2 + 1721119 ))
+        echo $(( (734 * d2j_tmpmonth + 15) / 24
+                 - 2 * d2j_tmpyear + d2j_tmpyear/4
+                 - d2j_tmpyear/100 + d2j_tmpyear/400 + $2 + 1721119 ))
     else
         echo 0
     fi
@@ -493,7 +499,7 @@ prints()
         ${PRINTF} "%-35s %-35s %-32s %-17s\n" "$1:$2" "$7" "$8" "$6"
 
     elif [ "${QUIET}" != "TRUE" ] && [ "${VALIDATION}" != "TRUE" ]; then
-        MIN_DATE=$(echo $4 | ${AWK} '{ print $1, $2, $4 }')
+        MIN_DATE=$(echo "$4" | "${AWK}" '{ print $1, $2, $4 }')
         if [ "${NAGIOS}" == "TRUE" ]; then
             ${PRINTF} "%-47s %-12s %-12s %-4s %-30s\n" "$1:$2" "$3" "$MIN_DATE" \|days="$5"
         else
@@ -651,15 +657,13 @@ check_server_status() {
         TLSFLAG=""
     fi
 
-    if [ "${VERSION}" != "" ]; then
-        VER="-${VERSION}"
+    if [ "${TLSSERVERNAME}" = "FALSE" ]; then
+	TLSFLAG=(s_client -crlf -connect "${1}":"${2}" "${VERSION}")
+    else
+        TLSFLAG=(s_client -crlf -connect "${1}":"${2}" -servername "${1}" "${VERSION}")
     fi
 
-    if [ "${TLSSERVERNAME}" = "TRUE" ]; then
-         TLSFLAG="${TLSFLAG} -servername $1"
-    fi
-
-    echo "" | "${OPENSSL}" s_client -crlf ${VER} -connect ${1}:${2} ${TLSFLAG} 2> "${ERROR_TMP}" 1> "${CERT_TMP}"
+    echo "" | "${OPENSSL}" "${TLSFLAG[@]}" 2> "${ERROR_TMP}" 1> "${CERT_TMP}"
 
     if "${GREP}" -i "Connection refused" "${ERROR_TMP}" > /dev/null; then
         prints "${1}" "${2}" "Connection refused" "Unknown"
@@ -721,56 +725,56 @@ check_file_status() {
 
         # Extract the issuer from the certificate
         CERTISSUER=$("${OPENSSL}" x509 -in "${CERT_TMP}" -issuer -noout | \
-                   "${AWK}" 'BEGIN {RS="/" } $0 ~ /^O=/ \
+                     "${AWK}" 'BEGIN {RS="/" } $0 ~ /^O=/ 
                                  { print substr($0,3,17)}')
 
         ### Grab the common name (CN) from the X.509 certificate
         COMMONNAME=$("${OPENSSL}" x509 -in "${CERT_TMP}" -subject -noout | \
-                   "${SED}" -e 's/.*CN=//' | \
-                   "${SED}" -e 's/\/.*//')
+                     "${SED}" -e 's/.*CN=//' | \
+                     "${SED}" -e 's/\/.*//')
 
         ### Grab the serial number from the X.509 certificate
         SERIAL=$("${OPENSSL}" x509 -in "${CERT_TMP}" -serial -noout | \
                  "${SED}" -e 's/serial=//')
     else
         # Extract the expiration date from the ceriticate
-        CERTDATE=$(${OPENSSL} x509 -in ${CERTFILE} -enddate -noout -inform ${CERTTYPE} | \
-                 ${SED} 's/notAfter\=//')
+        CERTDATE=$("${OPENSSL}" x509 -in "${CERTFILE}" -enddate -noout -inform "${CERTTYPE}" | \
+                   "${SED}" 's/notAfter\=//')
 
         # Extract the issuer from the certificate
-        CERTISSUER=$(${OPENSSL} x509 -in ${CERTFILE} -issuer -noout -inform ${CERTTYPE} | \
-                   ${AWK} 'BEGIN {RS="/" } $0 ~ /^O=/ { print substr($0,3,17)}')
+        CERTISSUER=$("${OPENSSL}" x509 -in "${CERTFILE}" -issuer -noout -inform "${CERTTYPE}" | \
+                     "${AWK}" 'BEGIN {RS="/" } $0 ~ /^O=/ { print substr($0,3,17)}')
 
         ### Grab the common name (CN) from the X.509 certificate
-        COMMONNAME=$(${OPENSSL} x509 -in ${CERTFILE} -subject -noout -inform ${CERTTYPE} | \
-                   ${SED} -e 's/.*CN=//' | \
-                   ${SED} -e 's/\/.*//')
+        COMMONNAME=$("${OPENSSL}" x509 -in "${CERTFILE}" -subject -noout -inform "${CERTTYPE}" | \
+                     "${SED}" -e 's/.*CN=//' | \
+                     "${SED}" -e 's/\/.*//')
 
         ### Grab the serial number from the X.509 certificate
-        SERIAL=$(${OPENSSL} x509 -in ${CERTFILE} -serial -noout -inform ${CERTTYPE} | \
-                   ${SED} -e 's/serial=//')
+        SERIAL=$("${OPENSSL}" x509 -in "${CERTFILE}" -serial -noout -inform "${CERTTYPE}" | \
+                 "${SED}" -e 's/serial=//')
     fi
 
     ### Split the result into parameters, and pass the relevant pieces to date2julian
     set -- ${CERTDATE}
-    MONTH=$(getmonth ${1})
+    MONTH=$(getmonth "${1}")
 
     # Convert the date to seconds, and get the diff between NOW and the expiration date
-    CERTJULIAN=$(date2julian ${MONTH#0} ${2#0} ${4})
-    CERTDIFF=$(date_diff ${NOWJULIAN} ${CERTJULIAN})
+    CERTJULIAN=$(date2julian "${MONTH#0}" "${2#0}" "${4}")
+    CERTDIFF=$(date_diff "${NOWJULIAN}" "${CERTJULIAN}")
 
-    if [ ${CERTDIFF} -lt 0 ]; then
+    if [ "${CERTDIFF}" -lt 0 ]; then
         if [ "${ALARM}" = "TRUE" ]; then
-            send_mail ${SENDER} ${ADMIN} "Certificate for ${HOST} \"(CN: ${COMMONNAME})\" has expired!" \
+            send_mail "${SENDER}" "${ADMIN}" "Certificate for ${HOST} \"(CN: ${COMMONNAME})\" has expired!" \
                 "The SSL certificate for ${HOST} \"(CN: ${COMMONNAME})\" has expired!"
         fi
 
-        prints ${HOST} ${PORT} "Expired" "${CERTDATE}" "${CERTDIFF}" "${CERTISSUER}" "${COMMONNAME}" "${SERIAL}"
+        prints "${HOST}" "${PORT}" "Expired" "${CERTDATE}" "${CERTDIFF}" "${CERTISSUER}" "${COMMONNAME}" "${SERIAL}"
         RETCODE_LOCAL=2
 
-    elif [ ${CERTDIFF} -lt ${WARNDAYS} ]; then
+    elif [ "${CERTDIFF}" -lt "${WARNDAYS}" ]; then
         if [ "${ALARM}" = "TRUE" ]; then
-            send_mail ${SENDER} ${ADMIN} "Certificate for ${HOST} \"(CN: ${COMMONNAME})\" will expire in ${CERTDIFF}-days or less" \
+            send_mail "${SENDER}" "${ADMIN}" "Certificate for ${HOST} \"(CN: ${COMMONNAME})\" will expire in ${CERTDIFF}-days or less" \
                 "The SSL certificate for ${HOST} \"(CN: ${COMMONNAME})\" will expire on ${CERTDATE}"
         fi
         prints "${HOST}" "${PORT}" "Expiring" "${CERTDATE}" "${CERTDIFF}" "${CERTISSUER}" "${COMMONNAME}" "${SERIAL}"
@@ -783,7 +787,7 @@ check_file_status() {
 
     set_returncode "${RETCODE_LOCAL}"
     MIN_DATE=$(echo "${CERTDATE}" | "${AWK}" '{ print $1, $2, $4 }')
-    set_summary "${RETCODE_LOCAL}" "${HOST}" "${PORT}" "${MIN_DATE}" ${CERTDIFF}
+    set_summary "${RETCODE_LOCAL}" "${HOST}" "${PORT}" "${MIN_DATE}" "${CERTDIFF}"
 }
 
 #################################
@@ -797,7 +801,7 @@ do
         c) CERTFILE=${OPTARG};;
         d) CERTDIRECTORY=${OPTARG};;
         e) ADMIN=${OPTARG};;
-	E) SENDER=${OPTARG};;
+     E) SENDER=${OPTARG};;
         f) SERVERFILE=$OPTARG;;
         h) usage
            exit 1;;
@@ -814,7 +818,7 @@ do
         v) VERSION=$OPTARG;;
         V) echo "${PROGRAMVERSION}"
            exit 0
-	   ;;
+        ;;
         x) WARNDAYS=$OPTARG;;
        \?) usage
            exit 1;;
@@ -901,8 +905,9 @@ elif [ -f "${SERVERFILE}" ]; then
     print_heading
 
     IFS=$'\n'
-    for LINE in $(grep -E -v '(^#|^$)' "${SERVERFILE}")
-    do
+
+    #for LINE in $(grep -E -v '(^#|^$)' "${SERVERFILE}")
+    "${GREP}" -E -v '(^#|^$)' "${SERVERFILE}" | while read -r LINE; do
         HOST=${LINE%% *}
         PORT=${LINE#* }
         IFS=" "
