@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-PROGRAMVERSION=4.10
+PROGRAMVERSION=4.11
 #
 # Program: SSL Certificate Check <ssl-cert-check>
 #
@@ -658,9 +658,9 @@ check_server_status() {
     fi
 
     if [ "${TLSSERVERNAME}" = "FALSE" ]; then
-	TLSFLAG=(s_client -crlf -connect "${1}":"${2}" "${VERSION}")
+	TLSFLAG=(s_client -crlf -connect "${1}":"${2}")
     else
-        TLSFLAG=(s_client -crlf -connect "${1}":"${2}" -servername "${1}" "${VERSION}")
+        TLSFLAG=(s_client -crlf -connect "${1}":"${2}" -servername "${1}")
     fi
 
     echo "" | "${OPENSSL}" "${TLSFLAG[@]}" 2> "${ERROR_TMP}" 1> "${CERT_TMP}"
