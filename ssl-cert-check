@@ -481,6 +481,8 @@ date_diff()
 #   $4 -> Date when certificate will expire
 #   $5 -> Days left until the certificate will expire
 #   $6 -> Issuer of the certificate
+#   $7 -> Common name of certificate
+#   $8 -> Serial number of certificate
 #####################################################################
 prints()
 {
