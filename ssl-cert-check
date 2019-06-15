@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-PROGRAMVERSION=4.11
+PROGRAMVERSION=4.12
 #
 # Program: SSL Certificate Check <ssl-cert-check>
 #
@@ -12,6 +12,10 @@ PROGRAMVERSION=4.11
 # Last Updated: 02-12-2019
 #
 # Revision History:
+#
+# Version 4.12
+#  - add "-nameopt compat" to openssl x509 invocations to remain
+#    compatible with later versions of openssl
 #
 # Version 4.10
 #  - Replace tabs with spaces
@@ -720,38 +724,38 @@ check_file_status() {
                    -out "${CERT_TMP}" -clcerts -password pass:"${PKCSDBPASSWD}" 2> /dev/null
 
         # Extract the expiration date from the certificate
-        CERTDATE=$("${OPENSSL}" x509 -in "${CERT_TMP}" -enddate -noout | \
+        CERTDATE=$("${OPENSSL}" x509 -nameopt compat -in "${CERT_TMP}" -enddate -noout | \
                    "${SED}" 's/notAfter\=//')
 
         # Extract the issuer from the certificate
-        CERTISSUER=$("${OPENSSL}" x509 -in "${CERT_TMP}" -issuer -noout | \
+        CERTISSUER=$("${OPENSSL}" x509 -nameopt compat -in "${CERT_TMP}" -issuer -noout | \
                      "${AWK}" 'BEGIN {RS="/" } $0 ~ /^O=/ 
                                  { print substr($0,3,17)}')
 
         ### Grab the common name (CN) from the X.509 certificate
-        COMMONNAME=$("${OPENSSL}" x509 -in "${CERT_TMP}" -subject -noout | \
+        COMMONNAME=$("${OPENSSL}" x509 -nameopt compat -in "${CERT_TMP}" -subject -noout | \
                      "${SED}" -e 's/.*CN=//' | \
                      "${SED}" -e 's/\/.*//')
 
         ### Grab the serial number from the X.509 certificate
-        SERIAL=$("${OPENSSL}" x509 -in "${CERT_TMP}" -serial -noout | \
+        SERIAL=$("${OPENSSL}" x509 -nameopt compat -in "${CERT_TMP}" -serial -noout | \
                  "${SED}" -e 's/serial=//')
     else
         # Extract the expiration date from the ceriticate
-        CERTDATE=$("${OPENSSL}" x509 -in "${CERTFILE}" -enddate -noout -inform "${CERTTYPE}" | \
+        CERTDATE=$("${OPENSSL}" x509 -nameopt compat -in "${CERTFILE}" -enddate -noout -inform "${CERTTYPE}" | \
                    "${SED}" 's/notAfter\=//')
 
         # Extract the issuer from the certificate
-        CERTISSUER=$("${OPENSSL}" x509 -in "${CERTFILE}" -issuer -noout -inform "${CERTTYPE}" | \
+        CERTISSUER=$("${OPENSSL}" x509 -nameopt compat -in "${CERTFILE}" -issuer -noout -inform "${CERTTYPE}" | \
                      "${AWK}" 'BEGIN {RS="/" } $0 ~ /^O=/ { print substr($0,3,17)}')
 
         ### Grab the common name (CN) from the X.509 certificate
-        COMMONNAME=$("${OPENSSL}" x509 -in "${CERTFILE}" -subject -noout -inform "${CERTTYPE}" | \
+        COMMONNAME=$("${OPENSSL}" x509 -nameopt compat -in "${CERTFILE}" -subject -noout -inform "${CERTTYPE}" | \
                      "${SED}" -e 's/.*CN=//' | \
                      "${SED}" -e 's/\/.*//')
 
         ### Grab the serial number from the X.509 certificate
-        SERIAL=$("${OPENSSL}" x509 -in "${CERTFILE}" -serial -noout -inform "${CERTTYPE}" | \
+        SERIAL=$("${OPENSSL}" x509 -nameopt compat -in "${CERTFILE}" -serial -noout -inform "${CERTTYPE}" | \
                  "${SED}" -e 's/serial=//')
     fi
 
