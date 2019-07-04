@@ -684,6 +684,9 @@ check_server_status() {
     elif "${GREP}" -i "Name or service not known" "${ERROR_TMP}" > /dev/null; then
         prints "${1}" "${2}" "Unable to resolve the DNS name ${1}" "Unknown"
         set_returncode 3
+    elif "${GREP}" -i "unsupported protocol" "${ERROR_TMP}" > /dev/null; then
+        prints "${1}" "${2}" "Unsupported SSL/TLS protocol" "Unknown"
+        set_returncode 3
     else
         check_file_status "${CERT_TMP}" "${1}" "${2}"
     fi
