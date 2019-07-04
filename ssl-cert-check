@@ -643,24 +643,22 @@ usage()
 ##########################################################################
 check_server_status() {
 
-    if [ "_${2}" = "_smtp" ] || [ "_${2}" = "_25" ]; then
-        TLSFLAG="-starttls smtp"
-    elif [ "_${2}" = "_ftp" ] || [ "_${2}" = "_21" ]; then
-        TLSFLAG="-starttls ftp"
-    elif [ "_${2}" = "_pop3" ] || [ "_${2}" = "_110" ]; then
-        TLSFLAG="-starttls pop3"
-    elif [ "_${2}" = "_imap" ] || [ "_${2}" = "_143" ]; then
-        TLSFLAG="-starttls imap"
-    elif [ "_${2}" = "_submission" ] || [ "_${2}" = "_587" ]; then
-        TLSFLAG="-starttls smtp -port ${2}"
-    else
-        TLSFLAG=""
-    fi
-
     if [ "${TLSSERVERNAME}" = "FALSE" ]; then
-	TLSFLAG=(s_client -crlf -connect "${1}":"${2}")
+        TLSFLAG=(s_client -crlf -connect "${1}":"${2}")
     else
         TLSFLAG=(s_client -crlf -connect "${1}":"${2}" -servername "${1}")
+    fi
+
+    if [ "_${2}" = "_smtp" ] || [ "_${2}" = "_25" ]; then
+        TLSFLAG+=(-starttls smtp)
+    elif [ "_${2}" = "_ftp" ] || [ "_${2}" = "_21" ]; then
+        TLSFLAG+=(-starttls ftp)
+    elif [ "_${2}" = "_pop3" ] || [ "_${2}" = "_110" ]; then
+        TLSFLAG+=(-starttls pop3)
+    elif [ "_${2}" = "_imap" ] || [ "_${2}" = "_143" ]; then
+        TLSFLAG+=(-starttls imap)
+    elif [ "_${2}" = "_submission" ] || [ "_${2}" = "_587" ]; then
+        TLSFLAG+=(-starttls smtp -port "${2}")
     fi
 
     echo "" | "${OPENSSL}" "${TLSFLAG[@]}" 2> "${ERROR_TMP}" 1> "${CERT_TMP}"
