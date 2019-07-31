@@ -725,8 +725,8 @@ check_file_status() {
 
         # Extract the issuer from the certificate
         CERTISSUER=$("${OPENSSL}" x509 -in "${CERT_TMP}" -issuer -noout | \
-                     "${AWK}" 'BEGIN {RS="/" } $0 ~ /^O=/ 
-                                 { print substr($0,3,17)}')
+                     "${AWK}" 'BEGIN {RS="," } $0 ~ /^ O =/ 
+                                 { print substr($0,6,20)}')
 
         ### Grab the common name (CN) from the X.509 certificate
         COMMONNAME=$("${OPENSSL}" x509 -in "${CERT_TMP}" -subject -noout | \
@@ -743,7 +743,7 @@ check_file_status() {
 
         # Extract the issuer from the certificate
         CERTISSUER=$("${OPENSSL}" x509 -in "${CERTFILE}" -issuer -noout -inform "${CERTTYPE}" | \
-                     "${AWK}" 'BEGIN {RS="/" } $0 ~ /^O=/ { print substr($0,3,17)}')
+                     "${AWK}" 'BEGIN {RS="," } $0 ~ /^ O =/ { print substr($0,6,20)}')
 
         ### Grab the common name (CN) from the X.509 certificate
         COMMONNAME=$("${OPENSSL}" x509 -in "${CERTFILE}" -subject -noout -inform "${CERTTYPE}" | \
