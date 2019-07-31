@@ -658,9 +658,9 @@ check_server_status() {
     fi
 
     if [ "${TLSSERVERNAME}" = "FALSE" ]; then
-	TLSFLAG=(s_client -crlf -connect "${1}":"${2}")
+        TLSFLAG=(s_client -crlf -connect "${1}":"${2}" $TLSFLAG)
     else
-        TLSFLAG=(s_client -crlf -connect "${1}":"${2}" -servername "${1}")
+        TLSFLAG=(s_client -crlf -connect "${1}":"${2}" -servername "${1}" $TLSFLAG)
     fi
 
     echo "" | "${OPENSSL}" "${TLSFLAG[@]}" 2> "${ERROR_TMP}" 1> "${CERT_TMP}"
