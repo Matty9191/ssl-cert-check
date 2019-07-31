@@ -793,7 +793,7 @@ check_file_status() {
 #################################
 ### Start of main program
 #################################
-while getopts abinNv:e:E:f:c:d:hk:p:s:S:t:qx:V option
+while getopts abinNv:e:E:f:c:d:hk:p:s:St:qx:V option
 do
     case "${option}" in
         a) ALARM="TRUE";;
@@ -801,7 +801,7 @@ do
         c) CERTFILE=${OPTARG};;
         d) CERTDIRECTORY=${OPTARG};;
         e) ADMIN=${OPTARG};;
-     E) SENDER=${OPTARG};;
+        E) SENDER=${OPTARG};;
         f) SERVERFILE=$OPTARG;;
         h) usage
            exit 1;;
@@ -817,8 +817,7 @@ do
         q) QUIET="TRUE";;
         v) VERSION=$OPTARG;;
         V) echo "${PROGRAMVERSION}"
-           exit 0
-        ;;
+           exit 0;;
         x) WARNDAYS=$OPTARG;;
        \?) usage
            exit 1;;
