@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-PROGRAMVERSION=4.11
+PROGRAMVERSION=4.12
 #
 # Program: SSL Certificate Check <ssl-cert-check>
 #
@@ -9,9 +9,17 @@ PROGRAMVERSION=4.11
 #
 # Author: Matty < matty91 at gmail dot com >
 #
-# Last Updated: 02-12-2019
+# Last Updated: 08-29-2019
 #
 # Revision History:
+# Version 4.12
+#  - Add argument to specify a separate host to connect to
+#    used to check certs behind proxies or load balancers
+#  - Fix bug introduced in 4.10 causing TLS options set in TLS flag
+#    to be overwritten
+#
+# Version 4.11
+#  - Remove erroneous app version from s_client request
 #
 # Version 4.10
 #  - Replace tabs with spaces
@@ -619,6 +627,7 @@ usage()
     echo "  -f cert file      : File with a list of FQDNs and ports"
     echo "  -h                : Print this screen"
     echo "  -i                : Print the issuer of the certificate"
+    echo "  -j                : Host to connect to (interactive mode)"
     echo "  -k password       : PKCS12 file password"
     echo "  -n                : Run as a Nagios plugin"
     echo "  -N                : Run as a Nagios plugin and output one line summary (implies -n, requires -f or -d)"
@@ -640,30 +649,29 @@ usage()
 # Arguments:
 #   $1 -> Server name
 #   $2 -> TCP port to connect to
+#   $3 -> Host to connect to
 ##########################################################################
 check_server_status() {
 
-    if [ "_${2}" = "_smtp" ] || [ "_${2}" = "_25" ]; then
-        TLSFLAG="-starttls smtp"
-    elif [ "_${2}" = "_ftp" ] || [ "_${2}" = "_21" ]; then
-        TLSFLAG="-starttls ftp"
-    elif [ "_${2}" = "_pop3" ] || [ "_${2}" = "_110" ]; then
-        TLSFLAG="-starttls pop3"
-    elif [ "_${2}" = "_imap" ] || [ "_${2}" = "_143" ]; then
-        TLSFLAG="-starttls imap"
-    elif [ "_${2}" = "_submission" ] || [ "_${2}" = "_587" ]; then
-        TLSFLAG="-starttls smtp -port ${2}"
-    else
-        TLSFLAG=""
-    fi
-
     if [ "${TLSSERVERNAME}" = "FALSE" ]; then
-	TLSFLAG=(s_client -crlf -connect "${1}":"${2}")
+	TLSFLAG=(s_client -crlf -connect "${3:-${1}}":"${2}")
     else
-        TLSFLAG=(s_client -crlf -connect "${1}":"${2}" -servername "${1}")
+        TLSFLAG=(s_client -crlf -connect "${3:-${1}}":"${2}" -servername "${1}")
     fi
 
-    echo "" | "${OPENSSL}" "${TLSFLAG[@]}" 2> "${ERROR_TMP}" 1> "${CERT_TMP}"
+    if [ "_${2}" = "_smtp" ] || [ "_${2}" = "_25" ]; then
+        TLSFLAG+=("-starttls smtp")
+    elif [ "_${2}" = "_ftp" ] || [ "_${2}" = "_21" ]; then
+        TLSFLAG+=("-starttls ftp")
+    elif [ "_${2}" = "_pop3" ] || [ "_${2}" = "_110" ]; then
+        TLSFLAG+=("-starttls pop3")
+    elif [ "_${2}" = "_imap" ] || [ "_${2}" = "_143" ]; then
+        TLSFLAG+=("-starttls imap")
+    elif [ "_${2}" = "_submission" ] || [ "_${2}" = "_587" ]; then
+        TLSFLAG+=("-starttls smtp -port ${2}")
+    fi
+
+    echo "" | "${OPENSSL}" ${TLSFLAG[@]} 2> "${ERROR_TMP}" 1> "${CERT_TMP}"
 
     if "${GREP}" -i "Connection refused" "${ERROR_TMP}" > /dev/null; then
         prints "${1}" "${2}" "Connection refused" "Unknown"
@@ -793,7 +801,7 @@ check_file_status() {
 #################################
 ### Start of main program
 #################################
-while getopts abinNv:e:E:f:c:d:hk:p:s:S:t:qx:V option
+while getopts abinNv:e:E:f:j:c:d:hk:p:s:S:t:qx:V option
 do
     case "${option}" in
         a) ALARM="TRUE";;
@@ -806,6 +814,7 @@ do
         h) usage
            exit 1;;
         i) ISSUER="TRUE";;
+        j) CONNECTHOST=${OPTARG};;
         k) PKCSDBPASSWD=${OPTARG};;
         n) NAGIOS="TRUE";;
         N) NAGIOS="TRUE"
@@ -896,7 +905,7 @@ fi
 ### If a HOST and PORT were passed on the cmdline, use those values
 if [ "${HOST}" != "" ] && [ "${PORT}" != "" ]; then
     print_heading
-    check_server_status "${HOST}" "${PORT}"
+    check_server_status "${HOST}" "${PORT}" "${CONNECTHOST}"
     print_summary
 ### If a file is passed to the "-f" option on the command line, check
 ### each certificate or server / port combination in the file to see if
