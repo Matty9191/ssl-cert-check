@@ -281,6 +281,9 @@ ADMIN="root"
 # Email sender address for alarm notifications
 SENDER=""
 
+# Prefix to the subject e.g. [SSL EXPIRY]
+EMAIL_SUBJECT_PREFIX=""
+
 # Number of days in the warning threshhold (cmdline: -x)
 WARNDAYS=30
 
@@ -387,13 +390,13 @@ send_mail() {
 
     case "${MAILMODE}" in
         "mail")
-            echo "$MSG" | "${MAIL}" -r "$FROM" -s "$SUBJECT" "$TO"
+            echo "$MSG" | "${MAIL}" -r "$FROM" -s "${EMAIL_SUBJECT_PREFIX}$SUBJECT" "$TO"
             ;;
         "mailx")
-            echo "$MSG" | "${MAIL}" -s "$SUBJECT" "$TO"
+            echo "$MSG" | "${MAIL}" -s "${EMAIL_SUBJECT_PREFIX}$SUBJECT" "$TO"
             ;;
         "sendmail")
-            (echo "Subject:$SUBJECT" && echo "TO:$TO" && echo "FROM:$FROM" && echo "$MSG") | "${MAIL}" "$TO"
+            (echo "Subject:${EMAIL_SUBJECT_PREFIX}$SUBJECT" && echo "TO:$TO" && echo "FROM:$FROM" && echo "$MSG") | "${MAIL}" "$TO"
             ;;
         "*")
             echo "ERROR: You enabled automated alerts, but the mail binary could not be found."
@@ -612,10 +615,16 @@ usage()
     echo ""
     echo "  -a                : Send a warning message through E-mail"
     echo "  -b                : Will not print header"
-    echo "  -c cert file      : Print the expiration date for the PEM or PKCS12 formatted certificate in cert file"
+    echo "  -c, --certificate cert file "
+    echo "                    : Print the expiration date for the PEM or PKCS12 formatted certificate in cert file"
     echo "  -d cert directory : Print the expiration date for the PEM or PKCS12 formatted certificates in cert directory"
-    echo "  -e E-mail address : E-mail address to send expiration notices"
-    echo "  -E E-mail sender  : E-mail address of the sender"
+    echo "  -e, --emailFrom E-mail address "
+    echo "                    : E-mail address to send expiration notices"
+    echo "  -E ---emailTo E-mail sender "  
+    echo "                    : E-mail address of the sender"
+    echo "  --emailSubjectPrefix 'Subject Prefix '"  
+    echo "                    : Prefixes the email subject.  Ensure proper quoting and probaby a trailing space."
+    echo "                    : E-mail address of the sender"
     echo "  -f cert file      : File with a list of FQDNs and ports"
     echo "  -h                : Print this screen"
     echo "  -i                : Print the issuer of the certificate"
@@ -629,7 +638,8 @@ usage()
     echo "  -q                : Don't print anything on the console"
     echo "  -v                : Specify a specific protocol version to use (tls, ssl2, ssl3)"
     echo "  -V                : Print version information"
-    echo "  -x days           : Certificate expiration interval (eg. if cert_date < days)"
+    echo "  -x, --expiryDays days "
+    echo "                    : Certificate expiration interval (eg. if cert_date < days)"
     echo ""
 }
 
@@ -793,36 +803,64 @@ check_file_status() {
 #################################
 ### Start of main program
 #################################
-while getopts abinNv:e:E:f:c:d:hk:p:s:S:t:qx:V option
+options=$(getopt -l "certificate:,emailTo:,emailFrom:,emailSubjectPrefix:,expiryDays:" -o "abinNv:e:E:f:c:d:hk:p:s:S:t:qx:V" -a -- "$@")
+
+eval set -- "$options"
+echo $options
+
+while true
 do
-    case "${option}" in
-        a) ALARM="TRUE";;
-        b) NOHEADER="TRUE";;
-        c) CERTFILE=${OPTARG};;
-        d) CERTDIRECTORY=${OPTARG};;
-        e) ADMIN=${OPTARG};;
-     E) SENDER=${OPTARG};;
-        f) SERVERFILE=$OPTARG;;
-        h) usage
+    case "$1" in
+        -a) ALARM="TRUE";;
+        -b) NOHEADER="TRUE";;
+        -c|--certificate) 
+            shift
+            CERTFILE=$1;;
+        -d) 
+            shift
+            CERTDIRECTORY=$1;;
+        -e|--emailTo) 
+            shift
+            ADMIN=$1;;
+        -E|--emailFrom) 
+            shift
+            SENDER=$1;;
+        --emailSubjectPrefix) 
+            shift
+            EMAIL_SUBJECT_PREFIX="$1";;
+        -f) shift
+            SERVERFILE=$1;;
+        -h) usage
            exit 1;;
-        i) ISSUER="TRUE";;
-        k) PKCSDBPASSWD=${OPTARG};;
-        n) NAGIOS="TRUE";;
-        N) NAGIOS="TRUE"
+        -i) ISSUER="TRUE";;
+        -k) shift
+            PKCSDBPASSWD=$1;;
+        -n) NAGIOS="TRUE";;
+        -N) NAGIOS="TRUE"
            NAGIOSSUMMARY="TRUE";;
-        p) PORT=$OPTARG;;
-        s) HOST=$OPTARG;;
-        S) VALIDATION="TRUE";;
-        t) CERTTYPE=$OPTARG;;
-        q) QUIET="TRUE";;
-        v) VERSION=$OPTARG;;
-        V) echo "${PROGRAMVERSION}"
+        -p) shift
+            PORT=$1;;
+        -s) shift
+            HOST=$1;;
+        -S) VALIDATION="TRUE";;
+        -t) shift
+            CERTTYPE=$1;;
+        -q) QUIET="TRUE";;
+        -v) shift
+            VERSION=$1;;
+        -V) echo "${PROGRAMVERSION}"
            exit 0
         ;;
-        x) WARNDAYS=$OPTARG;;
+        -x|--expiryDays) shift
+            WARNDAYS=$1;;
        \?) usage
            exit 1;;
+        --)
+           shift
+           break;;
     esac
+
+    shift
 done
 
 ### Check to make sure a openssl utility is available
