@@ -10,10 +10,16 @@ Usage: ./ssl-cert-check [ -e email address ] [ -E sender email address ] [ -x da
 
   -a                : Send a warning message through E-mail
   -b                : Will not print header
-  -c cert file      : Print the expiration date for the PEM or PKCS12 formatted certificate in cert file
+  -c, --certificate cert file 
+                    : Print the expiration date for the PEM or PKCS12 formatted certificate in cert file
   -d cert directory : Print the expiration date for the PEM or PKCS12 formatted certificates in cert directory
-  -e E-mail address : E-mail address to send expiration notices
-  -E E-mail address : Sender E-mail address
+  -e, --emailFrom E-mail address 
+                    : E-mail address to send expiration notices
+  -E ---emailTo E-mail sender 
+                    : E-mail address of the sender
+  --emailSubjectPrefix 'Subject Prefix '
+                    : Prefixes the email subject.  Ensure proper quoting and probaby a trailing space.
+                    : E-mail address of the sender
   -f cert file      : File with a list of FQDNs and ports
   -h                : Print this screen
   -i                : Print the issuer of the certificate
@@ -22,11 +28,13 @@ Usage: ./ssl-cert-check [ -e email address ] [ -E sender email address ] [ -x da
   -N                : Run as a Nagios plugin and output one line summary (implies -n, requires -f or -d)
   -p port           : Port to connect to (interactive mode)
   -s commmon name   : Server to connect to (interactive mode)
+  -S                : Print validation information
   -t type           : Specify the certificate type
   -q                : Don't print anything on the console
   -v                : Specify a specific protocol version to use (tls, ssl2, ssl3)
-  -V                : Only print validation data
-  -x days           : Certificate expiration interval (eg. if cert_date < days)
+  -V                : Print version information
+  -x, --expiryDays days 
+                    : Certificate expiration interval (eg. if cert_date < days)
 </pre>
 
 # Examples:
