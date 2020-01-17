@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-PROGRAMVERSION=4.11
+PROGRAMVERSION=4.12
 #
 # Program: SSL Certificate Check <ssl-cert-check>
 #
@@ -9,9 +9,12 @@ PROGRAMVERSION=4.11
 #
 # Author: Matty < matty91 at gmail dot com >
 #
-# Last Updated: 02-12-2019
+# Last Updated: 01-17-2020
 #
 # Revision History:
+#
+# Version 4.12
+#  - Fixed various logic errors and typos -- Daniel Lewart
 #
 # Version 4.10
 #  - Replace tabs with spaces
@@ -49,7 +52,7 @@ PROGRAMVERSION=4.11
 #  - Fixed a typo in the program version
 #
 # Version 4.2
-#  - Change CERTDAYS to CERTDIFF in the e-mail subject. 
+#  - Change CERTDAYS to CERTDIFF in the e-mail subject.
 #
 # Version 4.1
 #  - Fix usage output
@@ -58,7 +61,7 @@ PROGRAMVERSION=4.11
 #  - Updated the script syntax to align with UNIX shell programming
 #  - Check for DNS resolution failures
 #  - First round of updates to make shellcheck happy
-#  - Rework the logic to call mailx. 
+#  - Rework the logic to call mailx.
 #  - Print the version with the "-V" option.
 #  - Define the version in the PROGRAMVERSION variable
 #
@@ -302,15 +305,12 @@ PKCSDBPASSWD=""
 # Type of certificate (PEM, DER, NET) (cmdline: -t)
 CERTTYPE="pem"
 
-# Protocol version to use (cmdline: -v)
-VERSION="-tls1_1"
-
 # Location of system binaries
 AWK=$(command -v awk)
 DATE=$(command -v date)
 GREP=$(command -v grep)
 OPENSSL=$(command -v openssl)
-PRINTF=$(which printf)
+PRINTF=$(command -v printf)
 SED=$(command -v sed)
 MKTEMP=$(command -v mktemp)
 FIND=$(command -v find)
@@ -333,7 +333,7 @@ elif [ -f /usr/sbin/mail ]; then
     MAILMODE="mail"
 elif [ -f /usr/sbin/sendmail ]; then
     MAIL="/usr/sbin/sendmail"
-    MAILMODE="sendmail"    
+    MAILMODE="sendmail"
 else
     MAIL="cantfindit"
     MAILMODE="cantfindit"
@@ -481,31 +481,33 @@ date_diff()
 #   $4 -> Date when certificate will expire
 #   $5 -> Days left until the certificate will expire
 #   $6 -> Issuer of the certificate
+#   $7 -> Common Name
+#   $8 -> Serial Number
 #####################################################################
 prints()
 {
-    if [ "${NAGIOSSUMMARY}" == "TRUE" ]; then
+    if [ "${NAGIOSSUMMARY}" = "TRUE" ]; then
         return
     fi
 
     if [ "${QUIET}" != "TRUE" ] && [ "${ISSUER}" = "TRUE" ] && [ "${VALIDATION}" != "TRUE" ]; then
-        MIN_DATE=$(echo "$4" | ${AWK} '{ print $1, $2, $4 }')
-        if [ "${NAGIOS}" == "TRUE" ]; then
-            ${PRINTF} "%-35s %-17s %-8s %-11s %-4s %-30s\n" "$1:$2" "$6" "$3" "$MIN_DATE" \|days="$5"
+        MIN_DATE=$(echo "$4" | "${AWK}" '{ printf "%3s %2d %4d", $1, $2, $4 }')
+        if [ "${NAGIOS}" = "TRUE" ]; then
+            ${PRINTF} "%-35s %-17s %-8s %-11s %s\n" "$1:$2" "$6" "$3" "$MIN_DATE" "|days=$5"
         else
-            ${PRINTF} "%-35s %-17s %-8s %-11s %-4s %-30s\n" "$1:$2" "$6" "$3" "$MIN_DATE" "$5"
+            ${PRINTF} "%-35s %-17s %-8s %-11s %4d\n" "$1:$2" "$6" "$3" "$MIN_DATE" "$5"
         fi
-    elif [ "${QUIET}" != "TRUE" ] && [ "${ISSUER}" = "TRUE" ] && [ "${VALIDATION}" == "TRUE" ]; then
+    elif [ "${QUIET}" != "TRUE" ] && [ "${ISSUER}" = "TRUE" ] && [ "${VALIDATION}" = "TRUE" ]; then
         ${PRINTF} "%-35s %-35s %-32s %-17s\n" "$1:$2" "$7" "$8" "$6"
 
     elif [ "${QUIET}" != "TRUE" ] && [ "${VALIDATION}" != "TRUE" ]; then
-        MIN_DATE=$(echo "$4" | "${AWK}" '{ print $1, $2, $4 }')
-        if [ "${NAGIOS}" == "TRUE" ]; then
-            ${PRINTF} "%-47s %-12s %-12s %-4s %-30s\n" "$1:$2" "$3" "$MIN_DATE" \|days="$5"
+        MIN_DATE=$(echo "$4" | "${AWK}" '{ printf "%3s %2d, %4d", $1, $2, $4 }')
+        if [ "${NAGIOS}" = "TRUE" ]; then
+            ${PRINTF} "%-47s %-12s %-12s %s\n" "$1:$2" "$3" "$MIN_DATE" "|days=$5"
         else
-            ${PRINTF} "%-47s %-12s %-12s %-4s %-30s\n" "$1:$2" "$3" "$MIN_DATE" "$5"
+            ${PRINTF} "%-47s %-12s %-12s %4d\n" "$1:$2" "$3" "$MIN_DATE" "$5"
         fi
-    elif [ "${QUIET}" != "TRUE" ] && [ "${VALIDATION}" == "TRUE" ]; then
+    elif [ "${QUIET}" != "TRUE" ] && [ "${VALIDATION}" = "TRUE" ]; then
         ${PRINTF} "%-35s %-35s %-32s\n" "$1:$2" "$7" "$8"
     fi
 }
@@ -523,7 +525,7 @@ print_heading()
             ${PRINTF} "\n%-35s %-17s %-8s %-11s %-4s\n" "Host" "Issuer" "Status" "Expires" "Days"
             echo "----------------------------------- ----------------- -------- ----------- ----"
 
-        elif [ "${QUIET}" != "TRUE" ] && [ "${ISSUER}" = "TRUE" ] && [ "${NAGIOS}" != "TRUE" ] && [ "${VALIDATION}" == "TRUE" ]; then
+        elif [ "${QUIET}" != "TRUE" ] && [ "${ISSUER}" = "TRUE" ] && [ "${NAGIOS}" != "TRUE" ] && [ "${VALIDATION}" = "TRUE" ]; then
             ${PRINTF} "\n%-35s %-35s %-32s %-17s\n" "Host" "Common Name" "Serial #" "Issuer"
             echo "----------------------------------- ----------------------------------- -------------------------------- -----------------"
 
@@ -531,7 +533,7 @@ print_heading()
             ${PRINTF} "\n%-47s %-12s %-12s %-4s\n" "Host" "Status" "Expires" "Days"
             echo "----------------------------------------------- ------------ ------------ ----"
 
-        elif [ "${QUIET}" != "TRUE" ] && [ "${NAGIOS}" != "TRUE" ] && [ "${VALIDATION}" == "TRUE" ]; then
+        elif [ "${QUIET}" != "TRUE" ] && [ "${NAGIOS}" != "TRUE" ] && [ "${VALIDATION}" = "TRUE" ]; then
             ${PRINTF} "\n%-35s %-35s %-32s\n" "Host" "Common Name" "Serial #"
             echo "----------------------------------- ----------------------------------- --------------------------------"
         fi
@@ -623,11 +625,10 @@ usage()
     echo "  -n                : Run as a Nagios plugin"
     echo "  -N                : Run as a Nagios plugin and output one line summary (implies -n, requires -f or -d)"
     echo "  -p port           : Port to connect to (interactive mode)"
+    echo "  -q                : Don't print anything on the console"
     echo "  -s commmon name   : Server to connect to (interactive mode)"
     echo "  -S                : Print validation information"
     echo "  -t type           : Specify the certificate type"
-    echo "  -q                : Don't print anything on the console"
-    echo "  -v                : Specify a specific protocol version to use (tls, ssl2, ssl3)"
     echo "  -V                : Print version information"
     echo "  -x days           : Certificate expiration interval (eg. if cert_date < days)"
     echo ""
@@ -643,27 +644,31 @@ usage()
 ##########################################################################
 check_server_status() {
 
-    if [ "_${2}" = "_smtp" ] || [ "_${2}" = "_25" ]; then
-        TLSFLAG="-starttls smtp"
-    elif [ "_${2}" = "_ftp" ] || [ "_${2}" = "_21" ]; then
-        TLSFLAG="-starttls ftp"
-    elif [ "_${2}" = "_pop3" ] || [ "_${2}" = "_110" ]; then
-        TLSFLAG="-starttls pop3"
-    elif [ "_${2}" = "_imap" ] || [ "_${2}" = "_143" ]; then
-        TLSFLAG="-starttls imap"
-    elif [ "_${2}" = "_submission" ] || [ "_${2}" = "_587" ]; then
-        TLSFLAG="-starttls smtp -port ${2}"
-    else
-        TLSFLAG=""
-    fi
+    PORT="$2"
+    case "$PORT" in
+        smtp|25|submission|587) TLSFLAG="-starttls smtp";;
+        pop3|110)               TLSFLAG="-starttls pop3";;
+        imap|143)               TLSFLAG="-starttls imap";;
+        ftp|21)                 TLSFLAG="-starttls ftp";;
+        xmpp|5222)              TLSFLAG="-starttls xmpp";;
+        xmpp-server|5269)       TLSFLAG="-starttls xmpp-server";;
+        irc|194)                TLSFLAG="-starttls irc";;
+        postgres|5432)          TLSFLAG="-starttls postgres";;
+        mysql|3306)             TLSFLAG="-starttls mysql";;
+        lmtp|24)                TLSFLAG="-starttls lmtp";;
+        nntp|119)               TLSFLAG="-starttls nntp";;
+        sieve|4190)             TLSFLAG="-starttls sieve";;
+        ldap|389)               TLSFLAG="-starttls ldap";;
+        *)                      TLSFLAG="";;
+    esac
 
     if [ "${TLSSERVERNAME}" = "FALSE" ]; then
-	TLSFLAG=(s_client -crlf -connect "${1}":"${2}")
+        OPTIONS="-connect ${1}:${2} $TLSFLAG"
     else
-        TLSFLAG=(s_client -crlf -connect "${1}":"${2}" -servername "${1}")
+        OPTIONS="-connect ${1}:${2} -servername ${1} $TLSFLAG"
     fi
 
-    echo "" | "${OPENSSL}" "${TLSFLAG[@]}" 2> "${ERROR_TMP}" 1> "${CERT_TMP}"
+    echo "" | "${OPENSSL}" s_client $OPTIONS 2> "${ERROR_TMP}" 1> "${CERT_TMP}"
 
     if "${GREP}" -i "Connection refused" "${ERROR_TMP}" > /dev/null; then
         prints "${1}" "${2}" "Connection refused" "Unknown"
@@ -725,13 +730,13 @@ check_file_status() {
 
         # Extract the issuer from the certificate
         CERTISSUER=$("${OPENSSL}" x509 -in "${CERT_TMP}" -issuer -noout | \
-                     "${AWK}" 'BEGIN {RS="/" } $0 ~ /^O=/ 
-                                 { print substr($0,3,17)}')
+                     "${AWK}" 'BEGIN {RS=", " } $0 ~ /^O =/
+                                 { print substr($0,5,17)}')
 
         ### Grab the common name (CN) from the X.509 certificate
         COMMONNAME=$("${OPENSSL}" x509 -in "${CERT_TMP}" -subject -noout | \
-                     "${SED}" -e 's/.*CN=//' | \
-                     "${SED}" -e 's/\/.*//')
+                     "${SED}" -e 's/.*CN = //' | \
+                     "${SED}" -e 's/, .*//')
 
         ### Grab the serial number from the X.509 certificate
         SERIAL=$("${OPENSSL}" x509 -in "${CERT_TMP}" -serial -noout | \
@@ -743,12 +748,12 @@ check_file_status() {
 
         # Extract the issuer from the certificate
         CERTISSUER=$("${OPENSSL}" x509 -in "${CERTFILE}" -issuer -noout -inform "${CERTTYPE}" | \
-                     "${AWK}" 'BEGIN {RS="/" } $0 ~ /^O=/ { print substr($0,3,17)}')
+                     "${AWK}" 'BEGIN {RS=", " } $0 ~ /^O =/ { print substr($0,5,17)}')
 
         ### Grab the common name (CN) from the X.509 certificate
         COMMONNAME=$("${OPENSSL}" x509 -in "${CERTFILE}" -subject -noout -inform "${CERTTYPE}" | \
-                     "${SED}" -e 's/.*CN=//' | \
-                     "${SED}" -e 's/\/.*//')
+                     "${SED}" -e 's/.*CN = //' | \
+                     "${SED}" -e 's/, .*//')
 
         ### Grab the serial number from the X.509 certificate
         SERIAL=$("${OPENSSL}" x509 -in "${CERTFILE}" -serial -noout -inform "${CERTTYPE}" | \
@@ -793,7 +798,7 @@ check_file_status() {
 #################################
 ### Start of main program
 #################################
-while getopts abinNv:e:E:f:c:d:hk:p:s:S:t:qx:V option
+while getopts abc:d:e:E:f:hik:nNp:qs:St:Vx: option
 do
     case "${option}" in
         a) ALARM="TRUE";;
@@ -801,7 +806,7 @@ do
         c) CERTFILE=${OPTARG};;
         d) CERTDIRECTORY=${OPTARG};;
         e) ADMIN=${OPTARG};;
-     E) SENDER=${OPTARG};;
+        E) SENDER=${OPTARG};;
         f) SERVERFILE=$OPTARG;;
         h) usage
            exit 1;;
@@ -811,11 +816,10 @@ do
         N) NAGIOS="TRUE"
            NAGIOSSUMMARY="TRUE";;
         p) PORT=$OPTARG;;
+        q) QUIET="TRUE";;
         s) HOST=$OPTARG;;
         S) VALIDATION="TRUE";;
         t) CERTTYPE=$OPTARG;;
-        q) QUIET="TRUE";;
-        v) VERSION=$OPTARG;;
         V) echo "${PROGRAMVERSION}"
            exit 0
         ;;
@@ -841,13 +845,13 @@ fi
 
 ### Check to make sure a grep and find utility is available
 if [ ! -f "${GREP}" ] || [ ! -f "${FIND}" ]; then
-    echo "ERROR: Unable to locate the greb and find binary."
+    echo "ERROR: Unable to locate the grep and find binary."
     echo "FIX: Please modify the \${GREP} and \${FIND} variables in the program header."
     exit 1
 fi
 
 ### Check to make sure the mktemp and printf utilities are available
-if [ ! -f "${MKTEMP}" ] || [ ! -f "${PRINTF}" ]; then
+if [ ! -f "${MKTEMP}" ] || [ -z "${PRINTF}" ]; then
     echo "ERROR: Unable to locate the mktemp or printf binary."
     echo "FIX: Please modify the \${MKTEMP} and \${PRINTF} variables in the program header."
     exit 1
@@ -893,10 +897,10 @@ else
     exit 1
 fi
 
-### If a HOST and PORT were passed on the cmdline, use those values
-if [ "${HOST}" != "" ] && [ "${PORT}" != "" ]; then
+### If a HOST was passed on the cmdline, use that value
+if [ "${HOST}" != "" ]; then
     print_heading
-    check_server_status "${HOST}" "${PORT}"
+    check_server_status "${HOST}" "${PORT:=443}"
     print_summary
 ### If a file is passed to the "-f" option on the command line, check
 ### each certificate or server / port combination in the file to see if
@@ -904,20 +908,13 @@ if [ "${HOST}" != "" ] && [ "${PORT}" != "" ]; then
 elif [ -f "${SERVERFILE}" ]; then
     print_heading
 
-    IFS=$'\n'
-
-    #for LINE in $(grep -E -v '(^#|^$)' "${SERVERFILE}")
-    "${GREP}" -E -v '(^#|^$)' "${SERVERFILE}" | while read -r LINE; do
-        HOST=${LINE%% *}
-        PORT=${LINE#* }
-        IFS=" "
+    "${GREP}" -E -v '(^#|^$)' "${SERVERFILE}" | while IFS=" 	:" read -r HOST PORT; do
         if [ "$PORT" = "FILE" ]; then
             check_file_status "${HOST}" "FILE" "${HOST}"
         else
-            check_server_status "${HOST}" "${PORT}"
+            check_server_status "${HOST}" "${PORT:=443}"
         fi
     done
-    IFS="${OLDIFS}"
     print_summary
 ### Check to see if the certificate in CERTFILE is about to expire
 elif [ "${CERTFILE}" != "" ]; then
