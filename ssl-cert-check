@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-PROGRAMVERSION=4.12
+PROGRAMVERSION=4.13
 #
 # Program: SSL Certificate Check <ssl-cert-check>
 #
@@ -12,6 +12,8 @@ PROGRAMVERSION=4.12
 # Last Updated: 01-17-2020
 #
 # Revision History:
+# Version 4.12
+#  - Reverted the file checking logic which breaks $RETCODE
 #
 # Version 4.12
 #  - Fixed various logic errors and typos -- Daniel Lewart
@@ -908,13 +910,19 @@ if [ "${HOST}" != "" ]; then
 elif [ -f "${SERVERFILE}" ]; then
     print_heading
 
-    "${GREP}" -E -v '(^#|^$)' "${SERVERFILE}" | while IFS=" 	:" read -r HOST PORT; do
+    IFS=$'\n'
+    for LINE in $(grep -E -v '(^#|^$)' "${SERVERFILE}")
+    do
+        HOST=${LINE%% *}
+        PORT=${LINE#* }
+        IFS=" "
         if [ "$PORT" = "FILE" ]; then
             check_file_status "${HOST}" "FILE" "${HOST}"
         else
-            check_server_status "${HOST}" "${PORT:=443}"
+            check_server_status "${HOST}" "${PORT}"
         fi
     done
+    IFS="${OLDIFS}"
     print_summary
 ### Check to see if the certificate in CERTFILE is about to expire
 elif [ "${CERTFILE}" != "" ]; then
