@@ -9,10 +9,11 @@ PROGRAMVERSION=4.13
 #
 # Author: Matty < matty91 at gmail dot com >
 #
-# Last Updated: 01-17-2020
+# Last Updated: 01-31-2020
 #
 # Revision History:
-# Version 4.12
+#
+# Version 4.13
 #  - Reverted the file checking logic which breaks $RETCODE
 #
 # Version 4.12
