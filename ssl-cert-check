@@ -914,8 +914,8 @@ elif [ -f "${SERVERFILE}" ]; then
     IFS=$'\n'
     for LINE in $(grep -E -v '(^#|^$)' "${SERVERFILE}")
     do
-        HOST=${LINE%% *}
-        PORT=${LINE#* }
+        HOST=${LINE%%:*}
+        PORT=${LINE##*:}
         IFS=" "
         if [ "$PORT" = "FILE" ]; then
             check_file_status "${HOST}" "FILE" "${HOST}"
