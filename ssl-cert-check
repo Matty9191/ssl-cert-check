@@ -14,7 +14,7 @@ PROGRAMVERSION=4.14
 # Revision History:
 #
 # Version 4.14
-#  - Fixed HOST / PORT discovery
+#  - Fixed HOST / PORT discovery @mhow2
 #
 # Version 4.13
 #  - Reverted the file checking logic which breaks $RETCODE
