@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-PROGRAMVERSION=4.13
+PROGRAMVERSION=4.14
 #
 # Program: SSL Certificate Check <ssl-cert-check>
 #
@@ -9,9 +9,12 @@ PROGRAMVERSION=4.13
 #
 # Author: Matty < matty91 at gmail dot com >
 #
-# Last Updated: 01-31-2020
+# Last Updated: 02-10-2020
 #
 # Revision History:
+#
+# Version 4.14
+#  - Fixed HOST / PORT discovery
 #
 # Version 4.13
 #  - Reverted the file checking logic which breaks $RETCODE
@@ -914,8 +917,8 @@ elif [ -f "${SERVERFILE}" ]; then
     IFS=$'\n'
     for LINE in $(grep -E -v '(^#|^$)' "${SERVERFILE}")
     do
-        HOST=${LINE%%:*}
-        PORT=${LINE##*:}
+        HOST=${LINE%% *}
+        PORT=${LINE##* }
         IFS=" "
         if [ "$PORT" = "FILE" ]; then
             check_file_status "${HOST}" "FILE" "${HOST}"
