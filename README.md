@@ -1,4 +1,4 @@
-#cert-expiry-checker
+# cert-expiry-checker
 
 # Generate sample certs file
 
