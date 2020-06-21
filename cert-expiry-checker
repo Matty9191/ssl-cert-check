@@ -17,7 +17,6 @@ alertErrorThreshold=15
 # rerun after reRunSec in seconds
 rerunSec=86400
 
-certsPath=/certs.json
 
 main() {
     usage $@
