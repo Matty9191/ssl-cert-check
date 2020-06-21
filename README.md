@@ -45,6 +45,14 @@ certs.json
 }
 ```
 
+### Note: Make sure you encrypt this config file.
+
+### override default config.json 
+
+```
+cert-expiry-checker --config /certs.json
+```
+
 # Sample logs
 
 ```

@@ -1,16 +1,26 @@
 #!/bin/bash
 
-certsPath=./certs.json
+# path for config file
+certsPath=/certs.json
+
+# Global variables
 certName=""
 certPath=""
 certType=""
 certPass=""
-alertWarnThreshold=30
-alertErrorThreshold=15
 expiryDaysLeft=""
+
+# generate warn msg after alertWarnThreshold days
+alertWarnThreshold=30
+# generate error msg after alertWarnThreshold days
+alertErrorThreshold=15
+# rerun after reRunSec in seconds
 rerunSec=86400
 
+certsPath=/certs.json
+
 main() {
+    usage $@
     while true
     do
         readJson
@@ -46,8 +56,9 @@ checkPKI(){
 
 
 checkJKS(){ 
+    keytool -list -storetype jks -keystore ${certPath} -storepass ${certPass} -v >> /dev/null
+    errorFatal
     aliases=`keytool -list -storetype jks -keystore ${certPath} -storepass ${certPass} -v |grep "Alias name"|awk -F":" '{print $2}'`
-
     for alias in `echo ${aliases}`
     do
         expiryDate=`keytool -list -storetype jks -keystore ${certPath} -storepass ${certPass} -v -alias ${alias} |grep "Valid from:"|sed s/".*until:"//`
@@ -89,5 +100,25 @@ info() {
 errorFormat() {
     echo "ERROR: 102 | Format is not correct"
 }
+
+errorFatal() {
+    if [ $? -ne 0 ];
+    then
+        echo "ERROR: 103 | ${certName} | ${certPath} | Not able to get certs information" >> /dev/stdout
+    fi   
+}
+
+usage() { 
+    if [ $# -eq 2 ]; then
+        if [ ${1} == '--config' ] && [ -f ${2} ]
+        then
+            certsPath=${2}
+        else
+            echo "Usage: cert-expiry-checker --config <json-config-path>"
+            exit 1
+        fi
+    fi
+}
+
 
 main
