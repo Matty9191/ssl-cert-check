@@ -1,0 +1,93 @@
+#!/bin/bash
+
+certsPath=./certs.json
+certName=""
+certPath=""
+certType=""
+certPass=""
+alertWarnThreshold=30
+alertErrorThreshold=15
+expiryDaysLeft=""
+rerunSec=86400
+
+main() {
+    while true
+    do
+        readJson
+        sleep ${rerunSec}
+    done
+}
+
+readJson() {
+
+    certsCount=`jq '.certs | length' ${certsPath}`;
+    for count in $(seq ${certsCount} $END);
+    do 
+        count=`expr $count - 1`
+        certName=`jq -r .certs[${count}].name ${certsPath}` 
+        certPath=`jq -r .certs[${count}].path ${certsPath}`
+        certType=`jq -r .certs[${count}].type ${certsPath}`
+        certPass=`jq -r .certs[${count}].pass ${certsPath}`
+        if [ ${certType} == "PEM" ] 
+        then
+            checkPKI                
+        elif [ ${certType} == "JKS" ]  || [ ${certType} == "PKCS12" ]
+        then
+            checkJKS
+        else
+            errorFormat
+        fi
+    done
+}
+
+checkPKI(){ 
+    echo "PKI Certs check"
+}
+
+
+checkJKS(){ 
+    aliases=`keytool -list -storetype jks -keystore ${certPath} -storepass ${certPass} -v |grep "Alias name"|awk -F":" '{print $2}'`
+
+    for alias in `echo ${aliases}`
+    do
+        expiryDate=`keytool -list -storetype jks -keystore ${certPath} -storepass ${certPass} -v -alias ${alias} |grep "Valid from:"|sed s/".*until:"//`
+        checkExpiry "${expiryDate}"
+    done
+}
+
+checkExpiry() {
+    expiryDate=$1
+    expirySec=`date "+%s" -d "${expiryDate}"`
+    currentSec=`date "+%s"`
+    expiryDaysLeftSec=`expr ${expirySec} - ${currentSec}`
+    expiryDaysLeft=`expr ${expiryDaysLeftSec} / 86400`
+    if [ ${alertErrorThreshold} -ge ${expiryDaysLeft} ];
+    then
+        error        
+    elif [ ${alertWarnThreshold} -ge ${expiryDaysLeft} ];
+    then
+        warning
+    else
+        info
+    fi
+
+}
+
+error() {
+    echo "ERROR: 101 | ${certName} | ${certPath} | This cert will expire in ${expiryDaysLeft} days. !!! Renew ASAP !!!" >> /dev/stderr
+}
+
+
+warning() {
+    echo "WARN: 101 | ${certName} | ${certPath} | This cert will expire in ${expiryDaysLeft} days. !!! Renew Soon !!!" >> /dev/stdout
+}
+
+info() {
+    echo "INFO: 101 | ${certName} | ${certPath} | This cert will expire in ${expiryDaysLeft} days. !!! All Good !!!" >> /dev/stdout
+} 
+
+errorFormat() {
+    echo "ERROR: 102 | Format is not correct"
+}
+
+main
