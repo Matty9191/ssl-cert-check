@@ -17,11 +17,11 @@ alertErrorThreshold=15
 # rerun after reRunSec in seconds
 rerunSec=86400
 
-printMetricCertsExpiryHeader {
+printMetricCertsExpiryHeader() {
     echo "# HELP $1 $2" > /var/lib/certinfo
     echo "# TYPE $1 $3" >> /var/lib/certinfo
 }
-printMetricCertsExpiryVaules {
+printMetricCertsExpiryVaules() {
     echo $1\{name=\"$4\",status=\"$5\",alias=\"$6\",path=\"$7\"\} $8 >> /var/lib/certinfo
 }
 
