@@ -137,7 +137,4 @@ usage() {
 
 
 
-printMetric certs_expiry "certificatre expiry in days." gauge "test cert" "h-1" "/test/test.1" 1
-
-
 main
