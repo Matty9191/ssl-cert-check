@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # path for config file
-certsPath=/certs.json
+configPath=/config.json
 
 # Global variables
 certName=""
@@ -22,21 +22,31 @@ main() {
     usage $@
     while true
     do
+        printMetricCertsExpiryHeader certs_expiry_check "certificatre expiry in days." gauge "${certName}" "ERROR" "$1" "${certPath}" ${expiryDaysLeft}
         readJson
         sleep ${rerunSec}
     done
 }
 
+printMetricCertsExpiryHeader {
+    echo "# HELP $1 $2" > /proc/certinfo
+    echo "# TYPE $1 $3" >> /proc/certinfo
+}
+printMetricCertsExpiryVaules {
+    echo $1\{name=\"$4\",status=\"$5\",alias=\"$6\",path=\"$7\"\} $8 >> /proc/certinfo
+}
+
+
 readJson() {
 
-    certsCount=`jq '.certs | length' ${certsPath}`;
+    certsCount=`jq '.certs | length' ${configPath}`;
     for count in $(seq ${certsCount} $END);
     do 
         count=`expr $count - 1`
-        certName=`jq -r .certs[${count}].name ${certsPath}` 
-        certPath=`jq -r .certs[${count}].path ${certsPath}`
-        certType=`jq -r .certs[${count}].type ${certsPath}`
-        certPass=`jq -r .certs[${count}].pass ${certsPath}`
+        certName=`jq -r .certs[${count}].name ${configPath}` 
+        certPath=`jq -r .certs[${count}].path ${configPath}`
+        certType=`jq -r .certs[${count}].type ${configPath}`
+        certPass=`jq -r .certs[${count}].pass ${configPath}`
         if [ ${certType} == "PEM" ] 
         then
             checkPKI                
@@ -61,39 +71,43 @@ checkJKS(){
     for alias in `echo ${aliases}`
     do
         expiryDate=`keytool -list -storetype jks -keystore ${certPath} -storepass ${certPass} -v -alias ${alias} |grep "Valid from:"|sed s/".*until:"//`
-        checkExpiry "${expiryDate}"
+        checkExpiry "${expiryDate}" "${alias}"
     done
 }
 
 checkExpiry() {
     expiryDate=$1
+    alias=$2
     expirySec=`date "+%s" -d "${expiryDate}"`
     currentSec=`date "+%s"`
     expiryDaysLeftSec=`expr ${expirySec} - ${currentSec}`
     expiryDaysLeft=`expr ${expiryDaysLeftSec} / 86400`
     if [ ${alertErrorThreshold} -ge ${expiryDaysLeft} ];
     then
-        error        
+        error ${alias}
     elif [ ${alertWarnThreshold} -ge ${expiryDaysLeft} ];
     then
-        warning
+        warning ${alias}
     else
-        info
+        info ${alias}
     fi
 
 }
 
 error() {
-    echo "ERROR: 101 | ${certName} | ${certPath} | This cert will expire in ${expiryDaysLeft} days. !!! Renew ASAP !!!" >> /dev/stderr
+    echo "ERROR: 101 | ${certName} | $1 |  ${certPath} | This cert will expire in ${expiryDaysLeft} days. !!! Renew ASAP !!!" >> /dev/stderr
+    printMetricCertsExpiryVaules certs_expiry_check "certificatre expiry in days." gauge "${certName}" "ERROR" "$1" "${certPath}" ${expiryDaysLeft}
 }
 
 
 warning() {
-    echo "WARN: 101 | ${certName} | ${certPath} | This cert will expire in ${expiryDaysLeft} days. !!! Renew Soon !!!" >> /dev/stdout
+    echo "WARN: 101 | ${certName} | $1 |  ${certPath} | This cert will expire in ${expiryDaysLeft} days. !!! Renew Soon !!!" >> /dev/stdout
+    printMetricCertsExpiryVaules certs_expiry_check "certificatre expiry in days." gauge "${certName}" "WARN" "$1" "${certPath}" ${expiryDaysLeft}
 }
 
 info() {
-    echo "INFO: 101 | ${certName} | ${certPath} | This cert will expire in ${expiryDaysLeft} days. !!! All Good !!!" >> /dev/stdout
+    echo "INFO: 101 | ${certName} | $1 |  ${certPath} | This cert will expire in ${expiryDaysLeft} days. !!! All Good !!!" >> /dev/stdout
+    printMetricCertsExpiryVaules certs_expiry_check "certificatre expiry in days." gauge "${certName}" "INFO" "$1" "${certPath}" ${expiryDaysLeft}
 } 
 
 errorFormat() {
@@ -103,7 +117,8 @@ errorFormat() {
 errorFatal() {
     if [ $? -ne 0 ];
     then
-        echo "ERROR: 103 | ${certName} | ${certPath} | Not able to get certs information" >> /dev/stdout
+        echo "ERROR: 103 | ${certName} | NA |  ${certPath} | Not able to get certs information" >> /dev/stdout
+        printMetricCertsExpiryVaules certs_expiry_check "certificatre expiry in days." gauge "${certName}" "FATAL" "NA" "${certPath}" 0
     fi   
 }
 
@@ -111,13 +126,17 @@ usage() {
     if [ $# -eq 2 ]; then
         if [ ${1} == '--config' ] && [ -f ${2} ]
         then
-            certsPath=${2}
+            configPath=${2}
         else
             echo "Usage: cert-expiry-checker --config <json-config-path>"
             exit 1
         fi
     fi
 }
+
+
+
+printMetric certs_expiry "certificatre expiry in days." gauge "test cert" "h-1" "/test/test.1" 1
 
 
 main
