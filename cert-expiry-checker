@@ -18,11 +18,13 @@ alertErrorThreshold=15
 rerunSec=86400
 
 printMetricCertsExpiryHeader() {
-    echo "# HELP $1 $2" > /var/lib/certinfo
-    echo "# TYPE $1 $3" >> /var/lib/certinfo
+    echo cat /var/lib/certinfo.txt > /var/lib/certinfo.sh
+    chmod +x /var/lib/certinfo.sh
+    echo "# HELP $1 $2" > /var/lib/certinfo.txt
+    echo "# TYPE $1 $3" >> /var/lib/certinfo.txt
 }
 printMetricCertsExpiryVaules() {
-    echo $1\{name=\"$4\",status=\"$5\",alias=\"$6\",path=\"$7\"\} $8 >> /var/lib/certinfo
+    echo $1\{name=\"$4\",status=\"$5\",alias=\"$6\",path=\"$7\"\} $8 >> /var/lib/certinfo.txt
 }
 
 
