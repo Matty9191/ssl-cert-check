@@ -30,6 +30,8 @@ def main():
             daysDict = getJKSExpiryDays(info)
         elif(info['type'] == 'PEM'):
             daysDict = getPEMExpiryDays(info)
+        elif(info['type'] == 'PKCS'):
+            daysDict = getPKCSExpiryDays(info)
         elif(info['type'] == 'URL'):
             daysDict = getRemoteExpiryDays(info)
         else: 

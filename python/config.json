@@ -4,15 +4,29 @@
         {
             "name":"cert 1",
             "passphrase":"changeit",
-            "path":"certs/https-1.jks",
+            "path":"certs/mock-1.jks",
             "type":"JKS"
+        },
+        {
+            "name":"cert 2",
+            "passphrase":"changeit",
+            "path":"certs/mock-1.pkcs12",
+            "type":"PKCS"
         },
         {
             "name":"cert 3",
             "passphrase":"changeit",
-            "path":"certs/test.jks",
-            "type":"JKS"
+            "path":"certs/mock-1.pem",
+            "type":"PEM"
+        },
+        {
+            "name":"google certs",
+            "passphrase":"NA",
+            "path": "google.com",
+            "port": "443",
+            "type":"URL"
         }
+
     ]
 }
 

@@ -3,6 +3,7 @@ import OpenSSL
 import datetime
 from datetime import date
 import jks
+from OpenSSL import crypto
 
 _ASN1 = OpenSSL.crypto.FILETYPE_ASN1
 
@@ -38,6 +39,16 @@ def getPEMExpiryDays(certInfo):
     daysRemain = int(expiryTime) - int(currentTime)
     return { certInfo['path']: daysRemain/(60*60*24) } 
 
+def getPKCSExpiryDays(certInfo):
+
+    x509 = crypto.load_pkcs12(open(certInfo['path'], 'rb').read(), bytes(certInfo['passphrase'], 'utf-8') )
+    expiryTime = datetime.datetime.strptime(x509.get_certificate().get_notAfter().decode('ascii'), '%Y%m%d%H%M%SZ').strftime('%s')
+    currentTime = datetime.date.today().strftime('%s')
+    daysRemain = int(expiryTime) - int(currentTime)
+    return { certInfo['path']: daysRemain/(60*60*24) } 
+
 #print(getRemoteExpiryDays({ 'path': "google.com", 'port': '443'}))
 #print(getPEMExpiryDays({ 'path':"certs/test.pem"}))
 #print(getJKSExpiryDays({ 'path': "certs/test.jks", 'passphrase': 'changeit' } ))
+
+#print(getPKCSExpiryDays({ 'path': "certs/test.p12", 'passphrase': 'changeit' } ))
