@@ -1,0 +1,42 @@
+{
+    "certs":
+    [
+        {
+            "name":"cert 1",
+            "pass":"changeit",
+            "path":"/certs/https-1.pkcs12",
+            "type":"PKCS12"
+        },
+        {
+            "name":"cert 2",
+            "pass":"changeit",
+            "path":"/certs/https-2.pkcs12",
+            "type":"PKCS12"
+        },
+        {
+            "name":"cert 3",
+            "pass":"changeit",
+            "path":"/certs/https-3.pkcs12",
+            "type":"PKCS12"
+        },
+        {
+            "name":"cert 4",
+            "pass":"changeit",
+            "path":"/crts/https-3.pkcs12",
+            "type":"PKCS12"
+        },
+        {
+            "name":"cert 5",
+            "pass":"changei",
+            "path":"/crts/https-3.pkcs12",
+            "type":"PKCS12"
+        },
+        {
+            "name":"cert 6",
+            "pass":"",
+            "path":"/crts/https-3.pkcs12",
+            "type":"PKCS12"
+        }
+    ]
+}
+

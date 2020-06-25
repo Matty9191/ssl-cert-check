@@ -1,0 +1,18 @@
+{
+    "certs":
+    [
+        {
+            "name":"cert 1",
+            "passphrase":"changeit",
+            "path":"certs/https-1.jks",
+            "type":"JKS"
+        },
+        {
+            "name":"cert 3",
+            "passphrase":"changeit",
+            "path":"certs/test.jks",
+            "type":"JKS"
+        }
+    ]
+}
+
