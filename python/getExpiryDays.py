@@ -15,7 +15,7 @@ def getRemoteExpiryDays(certInfo):
     currentTime = datetime.date.today().strftime('%s')
     daysRemain = int(expiryTime) - int(currentTime)
 
-    return { certInfo['path']: int(daysRemain) } 
+    return { certInfo['path']: int(daysRemain/(60*60*24)) } 
 
 def getJKSExpiryDays(certInfo):
 
@@ -27,7 +27,7 @@ def getJKSExpiryDays(certInfo):
         expiryTime = datetime.datetime.strptime(public_cert.get_notAfter().decode('ascii'), '%Y%m%d%H%M%SZ').strftime('%s')
         currentTime = datetime.date.today().strftime('%s')
         daysRemain = int(expiryTime) - int(currentTime)
-        jksDict[alias]=daysRemain
+        jksDict[alias]=daysRemain/(60*60*24)
     return jksDict
 
 
@@ -37,7 +37,7 @@ def getPEMExpiryDays(certInfo):
     expiryTime = datetime.datetime.strptime(x509.get_notAfter().decode('ascii'), '%Y%m%d%H%M%SZ').strftime('%s')
     currentTime = datetime.date.today().strftime('%s')
     daysRemain = int(expiryTime) - int(currentTime)
-    return { certInfo['path']: daysRemain } 
+    return { certInfo['path']: daysRemain/(60*60*24) } 
 
 def getPKCSExpiryDays(certInfo):
 
@@ -45,7 +45,7 @@ def getPKCSExpiryDays(certInfo):
     expiryTime = datetime.datetime.strptime(x509.get_certificate().get_notAfter().decode('ascii'), '%Y%m%d%H%M%SZ').strftime('%s')
     currentTime = datetime.date.today().strftime('%s')
     daysRemain = int(expiryTime) - int(currentTime)
-    return { certInfo['path']: daysRemain } 
+    return { certInfo['path']: daysRemain/(60*60*24) } 
 
 #print(getRemoteExpiryDays({ 'path': "google.com", 'port': '443'}))
 #print(getPEMExpiryDays({ 'path':"certs/test.pem"}))
