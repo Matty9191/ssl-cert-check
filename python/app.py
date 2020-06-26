@@ -21,16 +21,16 @@ app_port = '9100'
 app_host = '0.0.0.0'
 
 graphs['c'] = prometheus_client.Gauge(
-    "certs_expiry_dates",
-    "certs expiry dates",
-    ["certName", "certAlias","certPath"],
+    "get_cert_days_to_expire",
+    "get remaining days for certificate to expire",
+    ["cert_name", "cert_alias","cert_path"],
     registry=registry,
 )
 
 @app.route("/")
-def main():
+def generate_gauge():
     certs_data = {}
-    certs_arr = json_parser(app_config_path)
+    certs_arr = json_parser(app.config.get('app_config_path'))
     for info in certs_arr:
         if (info['type'] == 'JKS'):
             certs_data = get_jks_days_to_expire(info)
@@ -84,4 +84,5 @@ def main(argv):
 
 if __name__ == "__main__":
     main(sys.argv[1:])
+    app.config['app_config_path'] = sys.argv[2]
     app.run(host=app_host, port=app_port, debug=True)
