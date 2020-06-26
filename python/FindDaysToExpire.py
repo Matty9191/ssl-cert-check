@@ -54,7 +54,3 @@ def get_pkcs_days_to_expire(cert_info):
     cert_expire_data[cert_info['path']]=int(days_left/(60*60*24))
     return cert_expire_data 
 
-#print(get_remote_expiry_days({ 'path': "google.com", 'port': '443'}))
-#print(get_pem_days_to_expire({ 'path':"certs/test.pem"}))
-#print(get_jks_days_to_expire({ 'path': "certs/test.jks", 'passphrase': 'changeit' } ))
-#print(get_pkcs_days_to_expire({ 'path': "certs/test.p12", 'passphrase': 'changeit' } ))
