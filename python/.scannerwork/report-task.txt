@@ -1,6 +1,0 @@
-projectKey=cert-checker
-serverUrl=http://34.71.254.188:9000
-serverVersion=8.3.1.34397
-dashboardUrl=http://34.71.254.188:9000/dashboard?id=cert-checker
-ceTaskId=AXLyYNWdD6uuMiimdGPL
-ceTaskUrl=http://34.71.254.188:9000/api/ce/task?id=AXLyYNWdD6uuMiimdGPL
