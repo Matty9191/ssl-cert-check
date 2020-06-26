@@ -3,8 +3,8 @@ import prometheus_client
 from prometheus_client.core import CollectorRegistry
 from prometheus_client import Summary, Counter, Histogram, Gauge
 import time
-from jsonParser import *
-from getExpiryDays import *
+from JsonParser import *
+from FindDaysToExpire import *
 import sys, getopt
 
 
@@ -16,9 +16,9 @@ registry = CollectorRegistry()
 graphs = {}
 
 # app config
-appConfigPath = '/config.json'
-appPort = '9100'
-appHost = '0.0.0.0'
+app_config_path = '/config.json'
+app_port = '9100'
+app_host = '0.0.0.0'
 
 graphs['c'] = prometheus_client.Gauge(
     "certs_expiry_dates",
@@ -29,21 +29,21 @@ graphs['c'] = prometheus_client.Gauge(
 
 @app.route("/")
 def main():
-    daysDict = {}
-    certsArray = jsonParser('config.json')
-    for info in certsArray:
+    certs_data = {}
+    certs_arr = json_parser(app_config_path)
+    for info in certs_arr:
         if (info['type'] == 'JKS'):
-            daysDict = getJKSExpiryDays(info)
+            certs_data = get_jks_days_to_expire(info)
         elif(info['type'] == 'PEM'):
-            daysDict = getPEMExpiryDays(info)
+            certs_data = get_pem_days_to_expire(info)
         elif(info['type'] == 'PKCS'):
-            daysDict = getPKCSExpiryDays(info)
+            certs_data = get_pkcs_days_to_expire(info)
         elif(info['type'] == 'URL'):
-            daysDict = getRemoteExpiryDays(info)
+            certs_data = get_remote_expiry_days(info)
         else: 
             print('Format not supported')  
-        for alias in daysDict:
-            graphs['c'].labels(info['name'], alias, info['path']).set(daysDict[alias])
+        for alias in certs_data:
+            graphs['c'].labels(info['name'], alias, info['path']).set(certs_data[alias])
     return 'Check the /metrics for more details'
 
 @app.route("/metrics")
@@ -73,15 +73,15 @@ def main(argv):
     
     for opt, arg in opts:
         if opt == '-c':
-            appConfigPath = arg
-            print('INFO: Config : ->', appConfigPath)
+            app_config_path = arg
+            print('INFO: Config : ->', app_config_path)
         elif opt == '-p':
-            appPort = arg
-            print('INFO: Port : -> ', appPort)
+            app_port = arg
+            print('INFO: Port : -> ', app_port)
         elif opt == '-h':
-            appHost = arg
-            print('INFO: Port : -> ', appHost)
+            app_host = arg
+            print('INFO: Port : -> ', app_host)
 
 if __name__ == "__main__":
     main(sys.argv[1:])
-    app.run(host=appHost, port=appPort, debug=True)
+    app.run(host=app_host, port=app_port, debug=True)
