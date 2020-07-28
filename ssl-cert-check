@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-PROGRAMVERSION=4.14
+PROGRAMVERSION=4.15
 #
 # Program: SSL Certificate Check <ssl-cert-check>
 #
@@ -9,9 +9,15 @@ PROGRAMVERSION=4.14
 #
 # Author: Matty < matty91 at gmail dot com >
 #
-# Last Updated: 02-10-2020
+# Last Updated: 07-28-2020
 #
 # Revision History:
+#
+# Version 4.15
+# - Validate hostname also against SAN
+# - Validate against wildcard certificate
+# - Added new option to show common name
+# - Fixed typos
 #
 # Version 4.14
 #  - Fixed HOST / PORT discovery @mhow2
@@ -24,7 +30,7 @@ PROGRAMVERSION=4.14
 #
 # Version 4.10
 #  - Replace tabs with spaces
-#  - More shllcheck cleanup work
+#  - More shellcheck cleanup work
 #  - Remove unused DEBUG variable
 #  - Fixed an innocuous whitespace bug in TLSFLAG variable creation
 #  - Set the default TLS version to 1.1 (can be overridden with -v)
@@ -32,7 +38,7 @@ PROGRAMVERSION=4.14
 #    are documented here: http://mywiki.wooledge.org/BashFAQ/050
 #
 # Version 4.9
-#  - Add a signal handler to call the cleanup funtion
+#  - Add a signal handler to call the cleanup function
 #    if the script doesn't exit() cleanly -- Timothe Litt
 #
 # Version 4.8
@@ -479,7 +485,7 @@ date_diff()
 }
 
 #####################################################################
-# Purpose: Print a line with the expiraton interval
+# Purpose: Print a line with the expiration interval
 # Arguments:
 #   $1 -> Hostname
 #   $2 -> TCP Port
@@ -496,13 +502,16 @@ prints()
         return
     fi
 
-    if [ "${QUIET}" != "TRUE" ] && [ "${ISSUER}" = "TRUE" ] && [ "${VALIDATION}" != "TRUE" ]; then
+    if [ "${QUIET}" != "TRUE" ] && [ "${ISSUER}" = "TRUE" ] && [ "${VALIDATION}" != "TRUE" ] && [ "${CMNNAME}" != "TRUE" ]; then
         MIN_DATE=$(echo "$4" | "${AWK}" '{ printf "%3s %2d %4d", $1, $2, $4 }')
         if [ "${NAGIOS}" = "TRUE" ]; then
             ${PRINTF} "%-35s %-17s %-8s %-11s %s\n" "$1:$2" "$6" "$3" "$MIN_DATE" "|days=$5"
         else
             ${PRINTF} "%-35s %-17s %-8s %-11s %4d\n" "$1:$2" "$6" "$3" "$MIN_DATE" "$5"
         fi
+    elif [ "${QUIET}" != "TRUE" ] && [ "${ISSUER}" = "TRUE" ] && [ "${VALIDATION}" != "TRUE" ] && [ "${CMNNAME}" = "TRUE" ]; then
+        MIN_DATE=$(echo "$4" | "${AWK}" '{ printf "%3s %2d, %4d", $1, $2, $4 }')
+        ${PRINTF} "%-35s %-35s %-17s %-8s %-11s %-4s\n" "$1:$2" "$7" "$6" "$3" "$MIN_DATE" "$5"
     elif [ "${QUIET}" != "TRUE" ] && [ "${ISSUER}" = "TRUE" ] && [ "${VALIDATION}" = "TRUE" ]; then
         ${PRINTF} "%-35s %-35s %-32s %-17s\n" "$1:$2" "$7" "$8" "$6"
 
@@ -527,9 +536,13 @@ prints()
 print_heading()
 {
     if [ "${NOHEADER}" != "TRUE" ]; then
-        if [ "${QUIET}" != "TRUE" ] && [ "${ISSUER}" = "TRUE" ] && [ "${NAGIOS}" != "TRUE" ] && [ "${VALIDATION}" != "TRUE" ]; then
+        if [ "${QUIET}" != "TRUE" ] && [ "${ISSUER}" = "TRUE" ] && [ "${NAGIOS}" != "TRUE" ] && [ "${VALIDATION}" != "TRUE" ] && [ "${CMNNAME}" != "TRUE" ]; then
             ${PRINTF} "\n%-35s %-17s %-8s %-11s %-4s\n" "Host" "Issuer" "Status" "Expires" "Days"
             echo "----------------------------------- ----------------- -------- ----------- ----"
+
+        elif [ "${QUIET}" != "TRUE" ] && [ "${ISSUER}" = "TRUE" ] && [ "${NAGIOS}" != "TRUE" ] && [ "${VALIDATION}" != "TRUE" ] && [ "${CMNNAME}" = "TRUE" ]; then
+            ${PRINTF} "\n%-35s %-35s %-17s %-8s %-11s %-4s\n" "Host" "Common Name" "Issuer" "Status" "Expires" "Days"
+            echo "----------------------------------- ----------------------------------- ----------------- -------- ----------- ----"
 
         elif [ "${QUIET}" != "TRUE" ] && [ "${ISSUER}" = "TRUE" ] && [ "${NAGIOS}" != "TRUE" ] && [ "${VALIDATION}" = "TRUE" ]; then
             ${PRINTF} "\n%-35s %-35s %-32s %-17s\n" "Host" "Common Name" "Serial #" "Issuer"
@@ -615,7 +628,7 @@ set_summary()
 ##########################################
 usage()
 {
-    echo "Usage: $0 [ -e email address ] [-E sender email address] [ -x days ] [-q] [-a] [-b] [-h] [-i] [-n] [-N] [-v]"
+    echo "Usage: $0 [ -e email address ] [-E sender email address] [ -x days ] [-q] [-a] [-b] [-h] [-i] [-m] [-n] [-N] [-v]"
     echo "       { [ -s common_name ] && [ -p port] } || { [ -f cert_file ] } || { [ -c cert file ] } || { [ -d cert dir ] }"
     echo ""
     echo "  -a                : Send a warning message through E-mail"
@@ -628,11 +641,12 @@ usage()
     echo "  -h                : Print this screen"
     echo "  -i                : Print the issuer of the certificate"
     echo "  -k password       : PKCS12 file password"
+    echo "  -m                : Print common name of the certificate"
     echo "  -n                : Run as a Nagios plugin"
     echo "  -N                : Run as a Nagios plugin and output one line summary (implies -n, requires -f or -d)"
     echo "  -p port           : Port to connect to (interactive mode)"
     echo "  -q                : Don't print anything on the console"
-    echo "  -s commmon name   : Server to connect to (interactive mode)"
+    echo "  -s common name    : Server to connect to (interactive mode)"
     echo "  -S                : Print validation information"
     echo "  -t type           : Specify the certificate type"
     echo "  -V                : Print version information"
@@ -748,7 +762,7 @@ check_file_status() {
         SERIAL=$("${OPENSSL}" x509 -in "${CERT_TMP}" -serial -noout | \
                  "${SED}" -e 's/serial=//')
     else
-        # Extract the expiration date from the ceriticate
+        # Extract the expiration date from the certificate
         CERTDATE=$("${OPENSSL}" x509 -in "${CERTFILE}" -enddate -noout -inform "${CERTTYPE}" | \
                    "${SED}" 's/notAfter\=//')
 
@@ -764,11 +778,28 @@ check_file_status() {
         ### Grab the serial number from the X.509 certificate
         SERIAL=$("${OPENSSL}" x509 -in "${CERTFILE}" -serial -noout -inform "${CERTTYPE}" | \
                  "${SED}" -e 's/serial=//')
+
+        ### Grab DNS Subject Alternative Name from the X.509 certificate
+        DNS=$("${OPENSSL}" x509 -in "${CERT_TMP}" -text -noout -inform "${CERTTYPE}" | \
+              "${GREP}" DNS)
     fi
 
     ### Split the result into parameters, and pass the relevant pieces to date2julian
     set -- ${CERTDATE}
     MONTH=$(getmonth "${1}")
+
+    ### Check if certificate is validating correct CN or SAN DNS
+    if [[ "${HOST}" != "FILE" ]]; then
+        if [[ "${HOST}" != "${COMMONNAME}" ]]; then
+            HOSTWILD=$(echo ${HOST} | ${SED} -r 's/^([a-z0-9]+)\./(\1|\\*)./i')
+            REGEX="DNS:${HOSTWILD}"
+            if ! [[ ${DNS} =~ ${REGEX} ]]; then
+                prints "${HOST}" "${PORT}" "Invalid" "${CERTDATE}" "${CERTDIFF}" "${CERTISSUER}" "${COMMONNAME}" "${SERIAL}"
+                RETCODE_LOCAL=2
+                return
+            fi
+        fi
+    fi
 
     # Convert the date to seconds, and get the diff between NOW and the expiration date
     CERTJULIAN=$(date2julian "${MONTH#0}" "${2#0}" "${4}")
@@ -804,7 +835,7 @@ check_file_status() {
 #################################
 ### Start of main program
 #################################
-while getopts abc:d:e:E:f:hik:nNp:qs:St:Vx: option
+while getopts abc:d:e:E:f:hik:mnNp:qs:St:Vx: option
 do
     case "${option}" in
         a) ALARM="TRUE";;
@@ -818,6 +849,7 @@ do
            exit 1;;
         i) ISSUER="TRUE";;
         k) PKCSDBPASSWD=${OPTARG};;
+        m) CMNNAME="TRUE";;
         n) NAGIOS="TRUE";;
         N) NAGIOS="TRUE"
            NAGIOSSUMMARY="TRUE";;
