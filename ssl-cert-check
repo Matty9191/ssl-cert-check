@@ -14,6 +14,7 @@ PROGRAMVERSION=4.15
 # Revision History:
 #
 # Version 4.15
+# - Added new option to show common name
 # - Fixed typos
 #
 # Version 4.14
@@ -499,13 +500,16 @@ prints()
         return
     fi
 
-    if [ "${QUIET}" != "TRUE" ] && [ "${ISSUER}" = "TRUE" ] && [ "${VALIDATION}" != "TRUE" ]; then
+    if [ "${QUIET}" != "TRUE" ] && [ "${ISSUER}" = "TRUE" ] && [ "${VALIDATION}" != "TRUE" ] && [ "${CMNNAME}" != "TRUE" ]; then
         MIN_DATE=$(echo "$4" | "${AWK}" '{ printf "%3s %2d %4d", $1, $2, $4 }')
         if [ "${NAGIOS}" = "TRUE" ]; then
             ${PRINTF} "%-35s %-17s %-8s %-11s %s\n" "$1:$2" "$6" "$3" "$MIN_DATE" "|days=$5"
         else
             ${PRINTF} "%-35s %-17s %-8s %-11s %4d\n" "$1:$2" "$6" "$3" "$MIN_DATE" "$5"
         fi
+    elif [ "${QUIET}" != "TRUE" ] && [ "${ISSUER}" = "TRUE" ] && [ "${VALIDATION}" != "TRUE" ] && [ "${CMNNAME}" = "TRUE" ]; then
+        MIN_DATE=$(echo "$4" | "${AWK}" '{ printf "%3s %2d, %4d", $1, $2, $4 }')
+        ${PRINTF} "%-35s %-35s %-17s %-8s %-11s %-4s\n" "$1:$2" "$7" "$6" "$3" "$MIN_DATE" "$5"
     elif [ "${QUIET}" != "TRUE" ] && [ "${ISSUER}" = "TRUE" ] && [ "${VALIDATION}" = "TRUE" ]; then
         ${PRINTF} "%-35s %-35s %-32s %-17s\n" "$1:$2" "$7" "$8" "$6"
 
@@ -530,9 +534,13 @@ prints()
 print_heading()
 {
     if [ "${NOHEADER}" != "TRUE" ]; then
-        if [ "${QUIET}" != "TRUE" ] && [ "${ISSUER}" = "TRUE" ] && [ "${NAGIOS}" != "TRUE" ] && [ "${VALIDATION}" != "TRUE" ]; then
+        if [ "${QUIET}" != "TRUE" ] && [ "${ISSUER}" = "TRUE" ] && [ "${NAGIOS}" != "TRUE" ] && [ "${VALIDATION}" != "TRUE" ] && [ "${CMNNAME}" != "TRUE" ]; then
             ${PRINTF} "\n%-35s %-17s %-8s %-11s %-4s\n" "Host" "Issuer" "Status" "Expires" "Days"
             echo "----------------------------------- ----------------- -------- ----------- ----"
+
+        elif [ "${QUIET}" != "TRUE" ] && [ "${ISSUER}" = "TRUE" ] && [ "${NAGIOS}" != "TRUE" ] && [ "${VALIDATION}" != "TRUE" ] && [ "${CMNNAME}" = "TRUE" ]; then
+            ${PRINTF} "\n%-35s %-35s %-17s %-8s %-11s %-4s\n" "Host" "Common Name" "Issuer" "Status" "Expires" "Days"
+            echo "----------------------------------- ----------------------------------- ----------------- -------- ----------- ----"
 
         elif [ "${QUIET}" != "TRUE" ] && [ "${ISSUER}" = "TRUE" ] && [ "${NAGIOS}" != "TRUE" ] && [ "${VALIDATION}" = "TRUE" ]; then
             ${PRINTF} "\n%-35s %-35s %-32s %-17s\n" "Host" "Common Name" "Serial #" "Issuer"
@@ -618,7 +626,7 @@ set_summary()
 ##########################################
 usage()
 {
-    echo "Usage: $0 [ -e email address ] [-E sender email address] [ -x days ] [-q] [-a] [-b] [-h] [-i] [-n] [-N] [-v]"
+    echo "Usage: $0 [ -e email address ] [-E sender email address] [ -x days ] [-q] [-a] [-b] [-h] [-i] [-m] [-n] [-N] [-v]"
     echo "       { [ -s common_name ] && [ -p port] } || { [ -f cert_file ] } || { [ -c cert file ] } || { [ -d cert dir ] }"
     echo ""
     echo "  -a                : Send a warning message through E-mail"
@@ -631,6 +639,7 @@ usage()
     echo "  -h                : Print this screen"
     echo "  -i                : Print the issuer of the certificate"
     echo "  -k password       : PKCS12 file password"
+    echo "  -m                : Print common name of the certificate"
     echo "  -n                : Run as a Nagios plugin"
     echo "  -N                : Run as a Nagios plugin and output one line summary (implies -n, requires -f or -d)"
     echo "  -p port           : Port to connect to (interactive mode)"
@@ -807,7 +816,7 @@ check_file_status() {
 #################################
 ### Start of main program
 #################################
-while getopts abc:d:e:E:f:hik:nNp:qs:St:Vx: option
+while getopts abc:d:e:E:f:hik:mnNp:qs:St:Vx: option
 do
     case "${option}" in
         a) ALARM="TRUE";;
@@ -821,6 +830,7 @@ do
            exit 1;;
         i) ISSUER="TRUE";;
         k) PKCSDBPASSWD=${OPTARG};;
+        m) CMNNAME="TRUE";;
         n) NAGIOS="TRUE";;
         N) NAGIOS="TRUE"
            NAGIOSSUMMARY="TRUE";;
