@@ -14,6 +14,8 @@ PROGRAMVERSION=4.15
 # Revision History:
 #
 # Version 4.15
+# - Validate hostname also against SAN
+# - Validate against wildcard certificate
 # - Added new option to show common name
 # - Fixed typos
 #
@@ -776,11 +778,28 @@ check_file_status() {
         ### Grab the serial number from the X.509 certificate
         SERIAL=$("${OPENSSL}" x509 -in "${CERTFILE}" -serial -noout -inform "${CERTTYPE}" | \
                  "${SED}" -e 's/serial=//')
+
+        ### Grab DNS Subject Alternative Name from the X.509 certificate
+        DNS=$("${OPENSSL}" x509 -in "${CERT_TMP}" -text -noout -inform "${CERTTYPE}" | \
+              "${GREP}" DNS)
     fi
 
     ### Split the result into parameters, and pass the relevant pieces to date2julian
     set -- ${CERTDATE}
     MONTH=$(getmonth "${1}")
+
+    ### Check if certificate is validating correct CN or SAN DNS
+    if [[ "${HOST}" != "FILE" ]]; then
+        if [[ "${HOST}" != "${COMMONNAME}" ]]; then
+            HOSTWILD=$(echo ${HOST} | ${SED} -r 's/^([a-z0-9]+)\./(\1|\\*)./i')
+            REGEX="DNS:${HOSTWILD}"
+            if ! [[ ${DNS} =~ ${REGEX} ]]; then
+                prints "${HOST}" "${PORT}" "Invalid" "${CERTDATE}" "${CERTDIFF}" "${CERTISSUER}" "${COMMONNAME}" "${SERIAL}"
+                RETCODE_LOCAL=2
+                return
+            fi
+        fi
+    fi
 
     # Convert the date to seconds, and get the diff between NOW and the expiration date
     CERTJULIAN=$(date2julian "${MONTH#0}" "${2#0}" "${4}")
