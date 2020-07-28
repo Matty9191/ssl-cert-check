@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-PROGRAMVERSION=4.14
+PROGRAMVERSION=4.15
 #
 # Program: SSL Certificate Check <ssl-cert-check>
 #
@@ -9,9 +9,12 @@ PROGRAMVERSION=4.14
 #
 # Author: Matty < matty91 at gmail dot com >
 #
-# Last Updated: 02-10-2020
+# Last Updated: 07-28-2020
 #
 # Revision History:
+#
+# Version 4.15
+# - Fixed typos
 #
 # Version 4.14
 #  - Fixed HOST / PORT discovery @mhow2
@@ -24,7 +27,7 @@ PROGRAMVERSION=4.14
 #
 # Version 4.10
 #  - Replace tabs with spaces
-#  - More shllcheck cleanup work
+#  - More shellcheck cleanup work
 #  - Remove unused DEBUG variable
 #  - Fixed an innocuous whitespace bug in TLSFLAG variable creation
 #  - Set the default TLS version to 1.1 (can be overridden with -v)
@@ -32,7 +35,7 @@ PROGRAMVERSION=4.14
 #    are documented here: http://mywiki.wooledge.org/BashFAQ/050
 #
 # Version 4.9
-#  - Add a signal handler to call the cleanup funtion
+#  - Add a signal handler to call the cleanup function
 #    if the script doesn't exit() cleanly -- Timothe Litt
 #
 # Version 4.8
@@ -479,7 +482,7 @@ date_diff()
 }
 
 #####################################################################
-# Purpose: Print a line with the expiraton interval
+# Purpose: Print a line with the expiration interval
 # Arguments:
 #   $1 -> Hostname
 #   $2 -> TCP Port
@@ -632,7 +635,7 @@ usage()
     echo "  -N                : Run as a Nagios plugin and output one line summary (implies -n, requires -f or -d)"
     echo "  -p port           : Port to connect to (interactive mode)"
     echo "  -q                : Don't print anything on the console"
-    echo "  -s commmon name   : Server to connect to (interactive mode)"
+    echo "  -s common name    : Server to connect to (interactive mode)"
     echo "  -S                : Print validation information"
     echo "  -t type           : Specify the certificate type"
     echo "  -V                : Print version information"
@@ -748,7 +751,7 @@ check_file_status() {
         SERIAL=$("${OPENSSL}" x509 -in "${CERT_TMP}" -serial -noout | \
                  "${SED}" -e 's/serial=//')
     else
-        # Extract the expiration date from the ceriticate
+        # Extract the expiration date from the certificate
         CERTDATE=$("${OPENSSL}" x509 -in "${CERTFILE}" -enddate -noout -inform "${CERTTYPE}" | \
                    "${SED}" 's/notAfter\=//')
 
