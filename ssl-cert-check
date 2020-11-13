@@ -305,6 +305,9 @@ NAGIOS="FALSE"
 # Don't summarize Nagios output by default (cmdline: -N)
 NAGIOSSUMMARY="FALSE"
 
+# Expiring certs will default to warn exit code for nagios (cmdline: -o)
+EXPIREEXIT=1
+
 # NULL out the PKCSDBPASSWD variable for later use (cmdline: -k)
 PKCSDBPASSWD=""
 
@@ -615,7 +618,7 @@ set_summary()
 ##########################################
 usage()
 {
-    echo "Usage: $0 [ -e email address ] [-E sender email address] [ -x days ] [-q] [-a] [-b] [-h] [-i] [-n] [-N] [-v]"
+    echo "Usage: $0 [ -e email address ] [-E sender email address] [ -x days ] [-q] [-a] [-b] [-h] [-i] [-n] [-N] [-o] [-v]"
     echo "       { [ -s common_name ] && [ -p port] } || { [ -f cert_file ] } || { [ -c cert file ] } || { [ -d cert dir ] }"
     echo ""
     echo "  -a                : Send a warning message through E-mail"
@@ -630,6 +633,7 @@ usage()
     echo "  -k password       : PKCS12 file password"
     echo "  -n                : Run as a Nagios plugin"
     echo "  -N                : Run as a Nagios plugin and output one line summary (implies -n, requires -f or -d)"
+    echo "  -o                : Requires -n, override exit code to critical for any expiring certs (see -x)"
     echo "  -p port           : Port to connect to (interactive mode)"
     echo "  -q                : Don't print anything on the console"
     echo "  -s commmon name   : Server to connect to (interactive mode)"
@@ -789,7 +793,7 @@ check_file_status() {
                 "The SSL certificate for ${HOST} \"(CN: ${COMMONNAME})\" will expire on ${CERTDATE}"
         fi
         prints "${HOST}" "${PORT}" "Expiring" "${CERTDATE}" "${CERTDIFF}" "${CERTISSUER}" "${COMMONNAME}" "${SERIAL}"
-        RETCODE_LOCAL=1
+        RETCODE_LOCAL=${EXPIREEXIT}
 
     else
         prints "${HOST}" "${PORT}" "Valid" "${CERTDATE}" "${CERTDIFF}" "${CERTISSUER}" "${COMMONNAME}" "${SERIAL}"
@@ -804,7 +808,7 @@ check_file_status() {
 #################################
 ### Start of main program
 #################################
-while getopts abc:d:e:E:f:hik:nNp:qs:St:Vx: option
+while getopts abc:d:e:E:f:hik:nNop:qs:St:Vx: option
 do
     case "${option}" in
         a) ALARM="TRUE";;
@@ -821,6 +825,7 @@ do
         n) NAGIOS="TRUE";;
         N) NAGIOS="TRUE"
            NAGIOSSUMMARY="TRUE";;
+        o) EXPIREEXIT=2;;
         p) PORT=$OPTARG;;
         q) QUIET="TRUE";;
         s) HOST=$OPTARG;;
