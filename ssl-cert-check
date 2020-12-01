@@ -917,6 +917,7 @@ elif [ -f "${SERVERFILE}" ]; then
     IFS=$'\n'
     for LINE in $(grep -E -v '(^#|^$)' "${SERVERFILE}")
     do
+        LINE=${LINE/$'\r'/}
         HOST=${LINE%% *}
         PORT=${LINE##* }
         IFS=" "
