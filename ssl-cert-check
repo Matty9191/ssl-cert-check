@@ -325,6 +325,9 @@ FIND=$(command -v find)
 if [ -f /usr/bin/mailx ]; then
     MAIL="/usr/bin/mailx"
     MAILMODE="mailx"
+elif [ -f /usr/bin/s-nail ]; then
+    MAIL="/usr/bin/s-nail"
+    MAILMODE="mailx"
 elif [ -f /bin/mail ]; then
     MAIL="/bin/mail"
     MAILMODE="mail"
