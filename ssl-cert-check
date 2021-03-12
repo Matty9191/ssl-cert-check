@@ -717,8 +717,7 @@ check_file_status() {
 
     ### Check to make sure the certificate file exists
     if [ ! -r "${CERTFILE}" ] || [ ! -s "${CERTFILE}" ]; then
-        echo "ERROR: The file named ${CERTFILE} is unreadable or doesn't exist"
-        echo "ERROR: Please check to make sure the certificate for ${HOST}:${PORT} is valid"
+	prints ${2} ${3} "${CERTFILE} is unreadable or doesn't exist" "Unknown"
         set_returncode 3
         return
     fi
