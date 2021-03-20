@@ -5,7 +5,7 @@ ssl-cert-check is a Bourne shell script that can be used to report on expiring S
 # Usage:
 <pre>
 $ ./ssl-cert-check
-Usage: ./ssl-cert-check [ -e email address ] [ -E sender email address ] [ -x days ] [-q] [-a] [-b] [-h] [-i] [-n] [-N] [-v]
+Usage: ./ssl-cert-check [ -e email address ] [ -E sender email address ] [ -x days ] [-q] [-a] [-b] [-h] [-i] [-j] [-n] [-N] [-v]
        { [ -s common_name ] && [ -p port] } || { [ -f cert_file ] } || { [ -c cert file ] } || { [ -d cert dir ] }"
 
   -a                : Send a warning message through E-mail
@@ -17,6 +17,7 @@ Usage: ./ssl-cert-check [ -e email address ] [ -E sender email address ] [ -x da
   -f cert file      : File with a list of FQDNs and ports
   -h                : Print this screen
   -i                : Print the issuer of the certificate
+  -j                : Print each line as a JSON object
   -k password       : PKCS12 file password
   -n                : Run as a Nagios plugin
   -N                : Run as a Nagios plugin and output one line summary (implies -n, requires -f or -d)
@@ -59,6 +60,17 @@ Send an e-mail to admin@prefetch.net if a domain listed in ssldomains will expir
 
 <pre>
 $ ssl-cert-check -a -f ssldomains -q -x 60 -e admin@prefetch.net
+</pre>
+
+Print the expiration times as JSONL (every line is a separate JSON document):
+
+<pre>
+$ ssl-cert-check -j -f ssldomains
+{"host":"www.prefetch.com","port":"443","status":"Unable to resolve the DNS name www.prefetch.com","expires":"Unknown","days":""}
+{"host":"mail.prefetch.net","port":"993","status":"Unable to resolve the DNS name mail.prefetch.net","expires":"Unknown","days":""}
+{"host":"gmail.google.com","port":"443","status":"Valid","expires":"May 18 15:36:55 2021 GMT","days":"59"}
+{"host":"www.sun.com","port":"443","status":"Expired","expires":"","days":"-2459294"}
+{"host":"www.spotch.com","port":"443","status":"Valid","expires":"Apr 24 11:04:05 2021 GMT","days":"35"}
 </pre>
 
 # Additional Documentation
