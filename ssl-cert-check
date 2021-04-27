@@ -691,6 +691,9 @@ check_server_status() {
     elif "${GREP}" -i "ssl handshake failure" "${ERROR_TMP}" > /dev/null; then
         prints "${1}" "${2}" "SSL handshake failed" "Unknown"
         set_returncode 3
+    elif "${GREP}" -i "no peer certificate available" "${CERT_TMP}" > /dev/null; then
+        prints "${1}" "${2}" "No peer certificate available" "Unknown"
+        set_returncode 3
     elif "${GREP}" -i "connect: Connection timed out" "${ERROR_TMP}" > /dev/null; then
         prints "${1}" "${2}" "Connection timed out" "Unknown"
         set_returncode 3
