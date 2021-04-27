@@ -804,6 +804,15 @@ check_file_status() {
 #################################
 ### Start of main program
 #################################
+
+### Unset variables that are used in options-evaluation and subsequent control flow (and could be defined in the environment already)
+unset ALARM
+unset CERTFILE
+unset CERTDIRECTORY
+unset HOST
+unset NAGIOS
+unset SERVERFILE
+
 while getopts abc:d:e:E:f:hik:nNp:qs:St:Vx: option
 do
     case "${option}" in
