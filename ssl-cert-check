@@ -780,7 +780,7 @@ check_file_status() {
 	    then 
                 echo "The SSL certificate for ${HOST} \"(CN: ${COMMONNAME})\" has expired!" | mail -s "Certificate for ${HOST} (CN: \"${COMMONNAME}\" has expired!" ${ADMIN}
 	    else
-		"${SENDER}" "${ADMIN}" "Certificate for ${HOST} \"(CN: ${COMMONNAME})\" has expired!" \
+		send_mail "${SENDER}" "${ADMIN}" "Certificate for ${HOST} \"(CN: ${COMMONNAME})\" has expired!" \
                 "The SSL certificate for ${HOST} \"(CN: ${COMMONNAME})\" has expired!"
 	    fi
         fi
