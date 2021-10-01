@@ -305,6 +305,9 @@ NAGIOS="FALSE"
 # Don't summarize Nagios output by default (cmdline: -N)
 NAGIOSSUMMARY="FALSE"
 
+# Don't print each line as a JSON object by default (cmdline: -j)
+JSONL="FALSE"
+
 # NULL out the PKCSDBPASSWD variable for later use (cmdline: -k)
 PKCSDBPASSWD=""
 
@@ -498,23 +501,34 @@ prints()
 
     if [ "${QUIET}" != "TRUE" ] && [ "${ISSUER}" = "TRUE" ] && [ "${VALIDATION}" != "TRUE" ]; then
         MIN_DATE=$(echo "$4" | "${AWK}" '{ printf "%3s %2d %4d", $1, $2, $4 }')
-        if [ "${NAGIOS}" = "TRUE" ]; then
+        if [ "${JSONL}" = "TRUE" ]; then
+            echo "{\"host\":\"$1\",\"port\":\"$2\",\"issuer\":\"$6\",\"status\":\"$3\",\"expires\":\"$4\",\"days\":\"$5\"}"
+        elif [ "${NAGIOS}" = "TRUE" ]; then
             ${PRINTF} "%-35s %-17s %-8s %-11s %s\n" "$1:$2" "$6" "$3" "$MIN_DATE" "|days=$5"
         else
             ${PRINTF} "%-35s %-17s %-8s %-11s %4d\n" "$1:$2" "$6" "$3" "$MIN_DATE" "$5"
         fi
     elif [ "${QUIET}" != "TRUE" ] && [ "${ISSUER}" = "TRUE" ] && [ "${VALIDATION}" = "TRUE" ]; then
-        ${PRINTF} "%-35s %-35s %-32s %-17s\n" "$1:$2" "$7" "$8" "$6"
-
+        if [ "${JSONL}" = "TRUE" ]; then
+            echo "{\"host\":\"$1\",\"port\":\"$2\",\"common_name\":\"$7\",\"serial\":\"$8\",\"issuer\":\"$6\"}"
+        else
+            ${PRINTF} "%-35s %-35s %-32s %-17s\n" "$1:$2" "$7" "$8" "$6"
+        fi
     elif [ "${QUIET}" != "TRUE" ] && [ "${VALIDATION}" != "TRUE" ]; then
         MIN_DATE=$(echo "$4" | "${AWK}" '{ printf "%3s %2d, %4d", $1, $2, $4 }')
-        if [ "${NAGIOS}" = "TRUE" ]; then
+        if [ "${JSONL}" = "TRUE" ]; then
+            echo "{\"host\":\"$1\",\"port\":\"$2\",\"status\":\"$3\",\"expires\":\"$4\",\"days\":\"$5\"}"
+        elif [ "${NAGIOS}" = "TRUE" ]; then
             ${PRINTF} "%-47s %-12s %-12s %s\n" "$1:$2" "$3" "$MIN_DATE" "|days=$5"
         else
             ${PRINTF} "%-47s %-12s %-12s %4d\n" "$1:$2" "$3" "$MIN_DATE" "$5"
         fi
     elif [ "${QUIET}" != "TRUE" ] && [ "${VALIDATION}" = "TRUE" ]; then
-        ${PRINTF} "%-35s %-35s %-32s\n" "$1:$2" "$7" "$8"
+        if [ "${JSONL}" = "TRUE" ]; then
+            echo "{\"host\":\"$1\",\"port\":\"$2\",\"common_name\":\"$7\",\"serial\":\"$8\"}"
+        else
+            ${PRINTF} "%-35s %-35s %-32s\n" "$1:$2" "$7" "$8"
+        fi
     fi
 }
 
@@ -526,6 +540,9 @@ prints()
 ####################################################
 print_heading()
 {
+    if [ "${JSONL}" = "TRUE" ]; then
+        return
+    fi
     if [ "${NOHEADER}" != "TRUE" ]; then
         if [ "${QUIET}" != "TRUE" ] && [ "${ISSUER}" = "TRUE" ] && [ "${NAGIOS}" != "TRUE" ] && [ "${VALIDATION}" != "TRUE" ]; then
             ${PRINTF} "\n%-35s %-17s %-8s %-11s %-4s\n" "Host" "Issuer" "Status" "Expires" "Days"
@@ -627,6 +644,7 @@ usage()
     echo "  -f cert file      : File with a list of FQDNs and ports"
     echo "  -h                : Print this screen"
     echo "  -i                : Print the issuer of the certificate"
+    echo "  -j                : Print each line as a JSON object"
     echo "  -k password       : PKCS12 file password"
     echo "  -n                : Run as a Nagios plugin"
     echo "  -N                : Run as a Nagios plugin and output one line summary (implies -n, requires -f or -d)"
@@ -804,7 +822,7 @@ check_file_status() {
 #################################
 ### Start of main program
 #################################
-while getopts abc:d:e:E:f:hik:nNp:qs:St:Vx: option
+while getopts abc:d:e:E:f:hijk:nNp:qs:St:Vx: option
 do
     case "${option}" in
         a) ALARM="TRUE";;
@@ -817,6 +835,7 @@ do
         h) usage
            exit 1;;
         i) ISSUER="TRUE";;
+        j) JSONL="TRUE";;
         k) PKCSDBPASSWD=${OPTARG};;
         n) NAGIOS="TRUE";;
         N) NAGIOS="TRUE"
