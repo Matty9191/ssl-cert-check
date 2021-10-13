@@ -13,6 +13,9 @@ PROGRAMVERSION=4.14
 #
 # Revision History:
 #
+# Version 4.15
+#  - Fixed openssl timeout error message @ryantm
+#
 # Version 4.14
 #  - Fixed HOST / PORT discovery @mhow2
 #
@@ -691,7 +694,7 @@ check_server_status() {
     elif "${GREP}" -i "ssl handshake failure" "${ERROR_TMP}" > /dev/null; then
         prints "${1}" "${2}" "SSL handshake failed" "Unknown"
         set_returncode 3
-    elif "${GREP}" -i "connect: Connection timed out" "${ERROR_TMP}" > /dev/null; then
+    elif "${GREP}" -i "connect:Connection timed out" "${ERROR_TMP}" > /dev/null; then
         prints "${1}" "${2}" "Connection timed out" "Unknown"
         set_returncode 3
     elif "${GREP}" -i "Name or service not known" "${ERROR_TMP}" > /dev/null; then
