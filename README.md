@@ -5,7 +5,7 @@ ssl-cert-check is a Bourne shell script that can be used to report on expiring S
 # Usage:
 <pre>
 $ ./ssl-cert-check
-Usage: ./ssl-cert-check [ -e email address ] [ -E sender email address ] [ -x days ] [-q] [-a] [-b] [-h] [-i] [-n] [-N] [-v]
+Usage: ./ssl-cert-check [ -e email address ] [ -E sender email address ] [ -x days ] [-q] [-a] [-b] [-h] [-i] [-n] [-N] [-o] [-v]
        { [ -s common_name ] && [ -p port] } || { [ -f cert_file ] } || { [ -c cert file ] } || { [ -d cert dir ] }"
 
   -a                : Send a warning message through E-mail
@@ -20,6 +20,7 @@ Usage: ./ssl-cert-check [ -e email address ] [ -E sender email address ] [ -x da
   -k password       : PKCS12 file password
   -n                : Run as a Nagios plugin
   -N                : Run as a Nagios plugin and output one line summary (implies -n, requires -f or -d)
+  -o                : Requires -n, override exit code to critical for any expiring certs (see -x)
   -p port           : Port to connect to (interactive mode)
   -s commmon name   : Server to connect to (interactive mode)
   -t type           : Specify the certificate type
