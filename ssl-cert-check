@@ -305,6 +305,21 @@ NAGIOS="FALSE"
 # Don't summarize Nagios output by default (cmdline: -N)
 NAGIOSSUMMARY="FALSE"
 
+# Don't send alert to Discord by default
+DISCORD="FALSE"
+
+# A part of Discord url to webhook (cmdline: -D "123456789/AAA_nvmldslAS23FlmsadFA7Llmsa3lmsd")
+DISCORD_WEBHOOK=""
+
+# Don't send alert to Telegram by default
+TELEGRAM=0
+
+# Telegram bot token (cmdline: -g "123456789:AAA_nvmldslAS23FlmsadFA7Llmsa3lmsd")
+TELEGRAM_BOT_TOKEN=""
+
+# Telegram chat or user id (cmdline: -G 26437058)
+TELEGRAM_CHAT_ID=""
+
 # NULL out the PKCSDBPASSWD variable for later use (cmdline: -k)
 PKCSDBPASSWD=""
 
@@ -321,29 +336,6 @@ SED=$(command -v sed)
 MKTEMP=$(command -v mktemp)
 FIND=$(command -v find)
 
-# Try to find a mail client
-if [ -f /usr/bin/mailx ]; then
-    MAIL="/usr/bin/mailx"
-    MAILMODE="mailx"
-elif [ -f /bin/mail ]; then
-    MAIL="/bin/mail"
-    MAILMODE="mail"
-elif [ -f /usr/bin/mail ]; then
-    MAIL="/usr/bin/mail"
-    MAILMODE="mail"
-elif [ -f /sbin/mail ]; then
-    MAIL="/sbin/mail"
-    MAILMODE="mail"
-elif [ -f /usr/sbin/mail ]; then
-    MAIL="/usr/sbin/mail"
-    MAILMODE="mail"
-elif [ -f /usr/sbin/sendmail ]; then
-    MAIL="/usr/sbin/sendmail"
-    MAILMODE="sendmail"
-else
-    MAIL="cantfindit"
-    MAILMODE="cantfindit"
-fi
 
 # Return code used by nagios. Initialize to 0.
 RETCODE=0
@@ -409,6 +401,41 @@ send_mail() {
     esac
 }
 
+
+#####################################################
+### Send to Discord messenger
+###  $1 -> Message text
+#####################################################
+send_to_discord () {
+
+    MSG=${1}
+    MSG=$(sed 's/\"/\\\\\\"/g' <<< "${MSG}")
+
+    URL="https://discord.com/api/webhooks/${DISCORD_WEBHOOK}"
+
+    PAYLOAD='{"content": "'${MSG}'"}'
+
+    curl -X POST -H "Content-Type: application/json" -s -d "${PAYLOAD}" $URL
+}
+
+
+#####################################################
+### Send to Telegram messenger
+###  $1 -> Message text
+#####################################################
+send_to_telegram () {
+
+    MSG=${1}
+    MSG=$(sed 's/\"/\\\\\\"/g' <<< "${MSG}")
+
+    URL="https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage"
+
+    PAYLOAD='{"chat_id":"'${TELEGRAM_CHAT_ID}'","text": "'${MSG}'"}'
+
+    curl -X POST -H "Content-Type: application/json" -s -d "${PAYLOAD}" $URL >> /dev/null
+}
+
+
 #############################################################################
 # Purpose: Convert a date from MONTH-DAY-YEAR to Julian format
 # Acknowledgements: Code was adapted from examples in the book
@@ -444,8 +471,7 @@ date2julian() {
 # Arguments:
 #   $1 -> Month name (e.g., Sep)
 #############################################################################
-getmonth()
-{
+getmonth() {
     case ${1} in
         Jan) echo 1 ;;
         Feb) echo 2 ;;
@@ -469,8 +495,7 @@ getmonth()
 #   $1 -> Date #1
 #   $2 -> Date #2
 #############################################################################
-date_diff()
-{
+date_diff() {
     if [ "${1}" != "" ] && [ "${2}" != "" ]; then
         echo $((${2} - ${1}))
     else
@@ -490,8 +515,7 @@ date_diff()
 #   $7 -> Common Name
 #   $8 -> Serial Number
 #####################################################################
-prints()
-{
+prints() {
     if [ "${NAGIOSSUMMARY}" = "TRUE" ]; then
         return
     fi
@@ -524,8 +548,7 @@ prints()
 # Arguments:
 #   None
 ####################################################
-print_heading()
-{
+print_heading() {
     if [ "${NOHEADER}" != "TRUE" ]; then
         if [ "${QUIET}" != "TRUE" ] && [ "${ISSUER}" = "TRUE" ] && [ "${NAGIOS}" != "TRUE" ] && [ "${VALIDATION}" != "TRUE" ]; then
             ${PRINTF} "\n%-35s %-17s %-8s %-11s %-4s\n" "Host" "Issuer" "Status" "Expires" "Days"
@@ -551,8 +574,7 @@ print_heading()
 # Arguments:
 #   None
 ####################################################
-print_summary()
-{
+print_summary() {
     if [ "${NAGIOSSUMMARY}" != "TRUE" ]; then
         return
     fi
@@ -574,8 +596,7 @@ print_summary()
 # Arguments:
 #   $1 -> New returncorde
 #############################################################
-set_returncode()
-{
+set_returncode() {
     if [ "${RETCODE}" -lt "${1}" ]; then
         RETCODE="${1}"
     fi
@@ -590,8 +611,7 @@ set_returncode()
 #   $4 -> Date when certificate will expire
 #   $5 -> Days left until the certificate will expire
 ########################################################################
-set_summary()
-{
+set_summary() {
     if [ "${1}" -eq 0 ]; then
         SUMMARY_VALID=$((SUMMARY_VALID+1))
     elif [ "${1}" -eq 1 ]; then
@@ -613,8 +633,7 @@ set_summary()
 # Arguments:
 #   None
 ##########################################
-usage()
-{
+usage() {
     echo "Usage: $0 [ -e email address ] [-E sender email address] [ -x days ] [-q] [-a] [-b] [-h] [-i] [-n] [-N] [-v]"
     echo "       { [ -s common_name ] && [ -p port] } || { [ -f cert_file ] } || { [ -c cert file ] } || { [ -d cert dir ] }"
     echo ""
@@ -622,9 +641,12 @@ usage()
     echo "  -b                : Will not print header"
     echo "  -c cert file      : Print the expiration date for the PEM or PKCS12 formatted certificate in cert file"
     echo "  -d cert directory : Print the expiration date for the PEM or PKCS12 formatted certificates in cert directory"
+    echo "  -D webhook path   : Set Discord webhook path (looks like {webhook.id}/{webhook.token})"
     echo "  -e E-mail address : E-mail address to send expiration notices"
     echo "  -E E-mail sender  : E-mail address of the sender"
     echo "  -f cert file      : File with a list of FQDNs and ports"
+    echo "  -g bot token      : Set Telegram bot token"
+    echo "  -G chat id        : Set Telegram chat id"
     echo "  -h                : Print this screen"
     echo "  -i                : Print the issuer of the certificate"
     echo "  -k password       : PKCS12 file password"
@@ -776,8 +798,15 @@ check_file_status() {
 
     if [ "${CERTDIFF}" -lt 0 ]; then
         if [ "${ALARM}" = "TRUE" ]; then
-            send_mail "${SENDER}" "${ADMIN}" "Certificate for ${HOST} \"(CN: ${COMMONNAME})\" has expired!" \
-                "The SSL certificate for ${HOST} \"(CN: ${COMMONNAME})\" has expired!"
+            SUBJECT="Certificate for ${HOST} \"(CN: ${COMMONNAME})\" has expired!"
+            if [ "${DISCORD}" = "TRUE" ]; then
+                send_to_discord "${SUBJECT}"
+            elif [[ "${TELEGRAM}" -ge 2 ]]; then
+                send_to_telegram "${SUBJECT}"
+            else
+                send_mail "${SENDER}" "${ADMIN}"  \
+                    "The SSL certificate for ${HOST} \"(CN: ${COMMONNAME})\" has expired!"
+            fi
         fi
 
         prints "${HOST}" "${PORT}" "Expired" "${CERTDATE}" "${CERTDIFF}" "${CERTISSUER}" "${COMMONNAME}" "${SERIAL}"
@@ -785,8 +814,15 @@ check_file_status() {
 
     elif [ "${CERTDIFF}" -lt "${WARNDAYS}" ]; then
         if [ "${ALARM}" = "TRUE" ]; then
-            send_mail "${SENDER}" "${ADMIN}" "Certificate for ${HOST} \"(CN: ${COMMONNAME})\" will expire in ${CERTDIFF} days or less" \
-                "The SSL certificate for ${HOST} \"(CN: ${COMMONNAME})\" will expire on ${CERTDATE}"
+            SUBJECT="Certificate for ${HOST} \"(CN: ${COMMONNAME})\" will expire in ${CERTDIFF} days or less"
+            if [ "${DISCORD}" = "TRUE" ]; then
+                send_to_discord "${SUBJECT}"
+            elif [[ "${TELEGRAM}" -ge 2 ]]; then
+                send_to_telegram "${SUBJECT}"
+            else
+                send_mail "${SENDER}" "${ADMIN}" "${SUBJECT}" \
+                    "The SSL certificate for ${HOST} \"(CN: ${COMMONNAME})\" will expire on ${CERTDATE}"
+            fi
         fi
         prints "${HOST}" "${PORT}" "Expiring" "${CERTDATE}" "${CERTDIFF}" "${CERTISSUER}" "${COMMONNAME}" "${SERIAL}"
         RETCODE_LOCAL=1
@@ -804,16 +840,22 @@ check_file_status() {
 #################################
 ### Start of main program
 #################################
-while getopts abc:d:e:E:f:hik:nNp:qs:St:Vx: option
+while getopts abc:d:D:e:E:f:g:G:hik:nNp:qs:St:Vx: option
 do
     case "${option}" in
         a) ALARM="TRUE";;
         b) NOHEADER="TRUE";;
         c) CERTFILE=${OPTARG};;
         d) CERTDIRECTORY=${OPTARG};;
+        D) DISCORD="TRUE"
+           DISCORD_WEBHOOK=${OPTARG};;
         e) ADMIN=${OPTARG};;
         E) SENDER=${OPTARG};;
         f) SERVERFILE=$OPTARG;;
+        g) TELEGRAM+=1
+           TELEGRAM_BOT_TOKEN=${OPTARG};;
+        G) TELEGRAM+=1
+           TELEGRAM_CHAT_ID=${OPTARG};;
         h) usage
            exit 1;;
         i) ISSUER="TRUE";;
@@ -834,6 +876,34 @@ do
            exit 1;;
     esac
 done
+
+# Try to find a client
+if [ "$SENDER" = "messenger" ]; then
+    MAIL="messenger"
+    MAILMODE="messenger"
+elif [ -f /usr/bin/mailx ]; then
+    MAIL="/usr/bin/mailx"
+    MAILMODE="mailx"
+elif [ -f /bin/mail ]; then
+    MAIL="/bin/mail"
+    MAILMODE="mail"
+elif [ -f /usr/bin/mail ]; then
+    MAIL="/usr/bin/mail"
+    MAILMODE="mail"
+elif [ -f /sbin/mail ]; then
+    MAIL="/sbin/mail"
+    MAILMODE="mail"
+elif [ -f /usr/sbin/mail ]; then
+    MAIL="/usr/sbin/mail"
+    MAILMODE="mail"
+elif [ -f /usr/sbin/sendmail ]; then
+    MAIL="/usr/sbin/sendmail"
+    MAILMODE="sendmail"
+else
+    MAIL="cantfindit"
+    MAILMODE="cantfindit"
+fi
+
 
 ### Check to make sure a openssl utility is available
 if [ ! -f "${OPENSSL}" ]; then
@@ -871,10 +941,12 @@ if [ ! -f "${SED}" ] || [ ! -f "${AWK}" ]; then
 fi
 
 ### Check to make sure a mail client is available it automated notifications are requested
-if [ "${ALARM}" = "TRUE" ] && [ ! -f "${MAIL}" ]; then
-    echo "ERROR: You enabled automated alerts, but the mail binary could not be found."
-    echo "FIX: Please modify the ${MAIL} variable in the program header."
-    exit 1
+if [ "${ALARM}" = "TRUE" ]; then
+    if [ ! -f "${MAIL}" ] && [ "${DISCORD}" = "FALSE" ] && [ "${TELEGRAM}" -le 0 ]; then
+        echo "ERROR: You enabled automated alerts, but the mail binary could not be found."
+        echo "FIX: Please modify the ${MAIL} variable in the program header."
+        exit 1
+    fi
 fi
 
 # Send along the servername when TLS is used
