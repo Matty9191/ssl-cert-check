@@ -308,7 +308,7 @@ NAGIOSSUMMARY="FALSE"
 # Don't send alert to Discord by default
 DISCORD="FALSE"
 
-# A part of Discord url to webhook (cmdline: -D "{webhook.id}/{webhook.token}")
+# A part of Discord url to webhook (cmdline: -D "123456789/AAA_nvmldslAS23FlmsadFA7Llmsa3lmsd")
 DISCORD_WEBHOOK=""
 
 # Don't send alert to Telegram by default
@@ -641,7 +641,7 @@ usage() {
     echo "  -b                : Will not print header"
     echo "  -c cert file      : Print the expiration date for the PEM or PKCS12 formatted certificate in cert file"
     echo "  -d cert directory : Print the expiration date for the PEM or PKCS12 formatted certificates in cert directory"
-    echo "  -D webhook path   : Set Discord webhook path and allow send alert to it"
+    echo "  -D webhook path   : Set Discord webhook path (looks like {webhook.id}/{webhook.token})"
     echo "  -e E-mail address : E-mail address to send expiration notices"
     echo "  -E E-mail sender  : E-mail address of the sender"
     echo "  -f cert file      : File with a list of FQDNs and ports"
