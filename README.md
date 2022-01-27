@@ -12,9 +12,12 @@ Usage: ./ssl-cert-check [ -e email address ] [ -E sender email address ] [ -x da
   -b                : Will not print header
   -c cert file      : Print the expiration date for the PEM or PKCS12 formatted certificate in cert file
   -d cert directory : Print the expiration date for the PEM or PKCS12 formatted certificates in cert directory
+  -D webhook path   : Set Discord webhook path (looks like {webhook.id}/{webhook.token})
   -e E-mail address : E-mail address to send expiration notices
   -E E-mail address : Sender E-mail address
   -f cert file      : File with a list of FQDNs and ports
+  -g bot token      : Set Telegram bot token
+  -G chat id        : Set Telegram chat id
   -h                : Print this screen
   -i                : Print the issuer of the certificate
   -k password       : PKCS12 file password
@@ -59,6 +62,18 @@ Send an e-mail to admin@prefetch.net if a domain listed in ssldomains will expir
 
 <pre>
 $ ssl-cert-check -a -f ssldomains -q -x 60 -e admin@prefetch.net
+</pre>
+
+Send an alarm to Telegram messenger if a domain listed in ssldomains will expire in the next 60-days:
+
+<pre>
+$ ssl-cert-check -a -f ssldomains -q -x 60 -g "123456789:AAA_nvmldslAS23FlmsadFA7Llmsa3lmsd" -G 26437058
+</pre>
+
+Send an alarm to Discord messenger if a domain listed in ssldomains will expire in the next 60-days:
+
+<pre>
+$ ssl-cert-check -a -f ssldomains -q -x 60 -D "123456789/AAA_nvmldslAS23FlmsadFA7Llmsa3lmsd"
 </pre>
 
 # Additional Documentation
