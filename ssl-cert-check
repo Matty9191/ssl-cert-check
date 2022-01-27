@@ -941,10 +941,12 @@ if [ ! -f "${SED}" ] || [ ! -f "${AWK}" ]; then
 fi
 
 ### Check to make sure a mail client is available it automated notifications are requested
-if [ "${ALARM}" = "TRUE" ] && [ ! -f "${MAIL}" ]; then
-    echo "ERROR: You enabled automated alerts, but the mail binary could not be found."
-    echo "FIX: Please modify the ${MAIL} variable in the program header."
-    exit 1
+if [ "${ALARM}" = "TRUE" ]; then
+    if [ ! -f "${MAIL}" ] && [ "${DISCORD}" = "FALSE" ] && [ "${TELEGRAM}" -le 0 ]; then
+        echo "ERROR: You enabled automated alerts, but the mail binary could not be found."
+        echo "FIX: Please modify the ${MAIL} variable in the program header."
+        exit 1
+    fi
 fi
 
 # Send along the servername when TLS is used
