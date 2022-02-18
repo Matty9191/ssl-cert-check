@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-PROGRAMVERSION=4.14
+PROGRAMVERSION=4.15
 #
 # Program: SSL Certificate Check <ssl-cert-check>
 #
@@ -9,9 +9,17 @@ PROGRAMVERSION=4.14
 #
 # Author: Matty < matty at prefetch dot net >
 #
-# Last Updated: 11-12-2020
+# Last Updated: 18-02-2022
 #
 # Revision History:
+# Version 4.12
+#  - Add argument to specify a separate host to connect to
+#    used to check certs behind proxies or load balancers
+#  - Fix bug introduced in 4.10 causing TLS options set in TLS flag
+#    to be overwritten
+#
+# Version 4.11
+#  - Remove erroneous app version from s_client request
 #
 # Version 4.14
 #  - Fixed HOST / PORT discovery @mhow2
@@ -627,6 +635,7 @@ usage()
     echo "  -f cert file      : File with a list of FQDNs and ports"
     echo "  -h                : Print this screen"
     echo "  -i                : Print the issuer of the certificate"
+    echo "  -j                : Host to connect to (interactive mode)"
     echo "  -k password       : PKCS12 file password"
     echo "  -n                : Run as a Nagios plugin"
     echo "  -N                : Run as a Nagios plugin and output one line summary (implies -n, requires -f or -d)"
@@ -647,6 +656,7 @@ usage()
 # Arguments:
 #   $1 -> Server name
 #   $2 -> TCP port to connect to
+#   $3 -> Host to connect to
 ##########################################################################
 check_server_status() {
 
@@ -804,7 +814,7 @@ check_file_status() {
 #################################
 ### Start of main program
 #################################
-while getopts abc:d:e:E:f:hik:nNp:qs:St:Vx: option
+while getopts abc:d:e:E:f:j:hik:nNp:qs:St:Vx: option
 do
     case "${option}" in
         a) ALARM="TRUE";;
@@ -817,6 +827,7 @@ do
         h) usage
            exit 1;;
         i) ISSUER="TRUE";;
+        j) CONNECTHOST=${OPTARG};;
         k) PKCSDBPASSWD=${OPTARG};;
         n) NAGIOS="TRUE";;
         N) NAGIOS="TRUE"
@@ -906,7 +917,7 @@ fi
 ### If a HOST was passed on the cmdline, use that value
 if [ "${HOST}" != "" ]; then
     print_heading
-    check_server_status "${HOST}" "${PORT:=443}"
+    check_server_status "${HOST}" "${PORT:=443}" "${CONNECTHOST}"
     print_summary
 ### If a file is passed to the "-f" option on the command line, check
 ### each certificate or server / port combination in the file to see if
