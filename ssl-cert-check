@@ -679,9 +679,11 @@ check_server_status() {
     esac
 
     if [ "${TLSSERVERNAME}" = "FALSE" ]; then
-        OPTIONS="-connect ${1}:${2} $TLSFLAG"
+        #OPTIONS="-connect ${1}:${2} $TLSFLAG"
+        OPTIONS="-connect ${3:-${1}}:${2} $TLSFLAG"
     else
-        OPTIONS="-connect ${1}:${2} -servername ${1} $TLSFLAG"
+        #OPTIONS="-connect ${1}:${2} -servername ${1} $TLSFLAG"
+        OPTIONS="-connect ${3:-${1}}:${2} -servername ${1} $TLSFLAG"
     fi
 
     echo "" | "${OPENSSL}" s_client $OPTIONS 2> "${ERROR_TMP}" 1> "${CERT_TMP}"
