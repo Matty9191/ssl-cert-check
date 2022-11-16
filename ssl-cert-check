@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-PROGRAMVERSION=4.14
+PROGRAMVERSION=4.15
 #
 # Program: SSL Certificate Check <ssl-cert-check>
 #
@@ -12,6 +12,9 @@ PROGRAMVERSION=4.14
 # Last Updated: 11-12-2020
 #
 # Revision History:
+#
+# Version 4.15
+#  - Added use Proxy server @ilmarkese1966
 #
 # Version 4.14
 #  - Fixed HOST / PORT discovery @mhow2
@@ -311,6 +314,9 @@ PKCSDBPASSWD=""
 # Type of certificate (PEM, DER, NET) (cmdline: -t)
 CERTTYPE="pem"
 
+# Proxy Utilization (cmdline: -P)
+PROXY=""
+
 # Location of system binaries
 AWK=$(command -v awk)
 DATE=$(command -v date)
@@ -347,6 +353,7 @@ fi
 
 # Return code used by nagios. Initialize to 0.
 RETCODE=0
+
 
 # Certificate counters and minimum difference. Initialize to 0.
 SUMMARY_VALID=0
@@ -617,6 +624,7 @@ usage()
 {
     echo "Usage: $0 [ -e email address ] [-E sender email address] [ -x days ] [-q] [-a] [-b] [-h] [-i] [-n] [-N] [-v]"
     echo "       { [ -s common_name ] && [ -p port] } || { [ -f cert_file ] } || { [ -c cert file ] } || { [ -d cert dir ] }"
+    echo "       { [ -P proxy address ] }"
     echo ""
     echo "  -a                : Send a warning message through E-mail"
     echo "  -b                : Will not print header"
@@ -637,6 +645,7 @@ usage()
     echo "  -t type           : Specify the certificate type"
     echo "  -V                : Print version information"
     echo "  -x days           : Certificate expiration interval (eg. if cert_date < days)"
+    echo "  -P proxy          : Proxy Utilization (proxy_address:proxy_port)"
     echo ""
 }
 
@@ -671,7 +680,12 @@ check_server_status() {
     if [ "${TLSSERVERNAME}" = "FALSE" ]; then
         OPTIONS="-connect ${1}:${2} $TLSFLAG"
     else
-        OPTIONS="-connect ${1}:${2} -servername ${1} $TLSFLAG"
+        #OPTIONS="-connect ${1}:${2} -servername ${1} $TLSFLAG"
+	if [ "${PROXY}" = "" ]; then
+		OPTIONS="-connect ${1}:${2} -servername ${1} $TLSFLAG"
+	else
+		OPTIONS="-connect ${1}:${2} -servername ${1} -proxy ${PROXY} $TLSFLAG"
+	fi
     fi
 
     echo "" | "${OPENSSL}" s_client $OPTIONS 2> "${ERROR_TMP}" 1> "${CERT_TMP}"
@@ -804,7 +818,7 @@ check_file_status() {
 #################################
 ### Start of main program
 #################################
-while getopts abc:d:e:E:f:hik:nNp:qs:St:Vx: option
+while getopts abc:d:e:E:f:hik:nNp:qs:St:Vx:P: option
 do
     case "${option}" in
         a) ALARM="TRUE";;
@@ -830,6 +844,7 @@ do
            exit 0
         ;;
         x) WARNDAYS=$OPTARG;;
+        P) PROXY=$OPTARG;;
        \?) usage
            exit 1;;
     esac
