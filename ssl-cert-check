@@ -689,7 +689,6 @@ check_server_status() {
     fi
 
     echo "" | "${OPENSSL}" s_client $OPTIONS 2> "${ERROR_TMP}" 1> "${CERT_TMP}"
-    #echo "" | "${OPENSSL}" s_client -proxy 10.3.1.38:8080 $OPTIONS 2> "${ERROR_TMP}" 1> "${CERT_TMP}"
 
     if "${GREP}" -i "Connection refused" "${ERROR_TMP}" > /dev/null; then
         prints "${1}" "${2}" "Connection refused" "Unknown"
