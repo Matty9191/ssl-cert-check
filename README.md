@@ -7,6 +7,7 @@ ssl-cert-check is a Bourne shell script that can be used to report on expiring S
 $ ./ssl-cert-check
 Usage: ./ssl-cert-check [ -e email address ] [ -E sender email address ] [ -x days ] [-q] [-a] [-b] [-h] [-i] [-n] [-N] [-v]
        { [ -s common_name ] && [ -p port] } || { [ -f cert_file ] } || { [ -c cert file ] } || { [ -d cert dir ] }"
+       { [ -P proxy address ] }
 
   -a                : Send a warning message through E-mail
   -b                : Will not print header
@@ -27,6 +28,7 @@ Usage: ./ssl-cert-check [ -e email address ] [ -E sender email address ] [ -x da
   -v                : Specify a specific protocol version to use (tls, ssl2, ssl3)
   -V                : Only print validation data
   -x days           : Certificate expiration interval (eg. if cert_date < days)
+  -P proxy          : Proxy Utilization (proxy_address:proxy_port)
 </pre>
 
 # Examples:
