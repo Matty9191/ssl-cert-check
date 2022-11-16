@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-PROGRAMVERSION=4.14
+PROGRAMVERSION=4.15
 #
 # Program: SSL Certificate Check <ssl-cert-check>
 #
@@ -12,6 +12,9 @@ PROGRAMVERSION=4.14
 # Last Updated: 11-12-2020
 #
 # Revision History:
+#
+# Version 4.15
+#  - Added use Proxy server @ilmarkese1966
 #
 # Version 4.14
 #  - Fixed HOST / PORT discovery @mhow2
