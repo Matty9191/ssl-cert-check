@@ -308,6 +308,9 @@ NAGIOSSUMMARY="FALSE"
 # NULL out the PKCSDBPASSWD variable for later use (cmdline: -k)
 PKCSDBPASSWD=""
 
+# NULL out the HOST variable for later use, otherwise a global variable will be used to specify the host
+HOST=""
+
 # Type of certificate (PEM, DER, NET) (cmdline: -t)
 CERTTYPE="pem"
 
