@@ -16,6 +16,17 @@ PROGRAMVERSION=5.0
 # FCCC Revision History
 #
 # Version 5.0
+#  - Added configurable timeout for the openssl call (-X)
+#  - Added CSV output (-C)
+#  - If -i, -S and -C are present, output all the fields
+#  - Restore SIGINT ability to cancel script
+#  - fixed handling of input file. Expected format of file is "server[:port]"
+#    Default port is 443 (SSL).
+#  - print "Timed out" status to table instead of error message if openssl s_client failed.
+#  - get the Server Alternative Names data from the certificate (for wildcard certs)
+#  - fixed bug in getting the issuer of the certificate
+#
+# Version 5.0a
 #  - Forked from https://github.com/Matty9191/ssl-cert-check
 #
 # Purpose:
@@ -61,7 +72,7 @@ PROGRAMVERSION=5.0
 # Cleanup temp files if they exist
 trap cleanup EXIT INT TERM QUIT
 
-PATH=/bin:/usr/bin:/sbin:/usr/sbin:/usr/local/bin:/usr/local/ssl/bin:/usr/sfw/bin
+PATH=/bin:/usr/bin:/sbin:/usr/sbin:/usr/local/bin:/usr/local/ssl/bin:/usr/sfw/bin:/opt/homebrew/bin:.
 export PATH
 
 # Who to page when an expired certificate is detected (cmdline: -e)
@@ -100,6 +111,7 @@ PRINTF=$(command -v printf)
 SED=$(command -v sed)
 MKTEMP=$(command -v mktemp)
 FIND=$(command -v find)
+TIMEOUT=$(command -v timeout)
 
 # Try to find a mail client
 if [ -f /usr/bin/mailx ]; then
@@ -146,6 +158,7 @@ umask 077
 #          exit() cleanly
 #####################################################
 cleanup() {
+    trap - INT # restore default INT handler
     if [ -f "${CERT_TMP}" ]; then
         rm -f "${CERT_TMP}"
     fi
@@ -153,6 +166,7 @@ cleanup() {
     if [ -f "${ERROR_TMP}" ]; then
      rm -f "${ERROR_TMP}"
     fi
+    kill -s INT "$$"
 }
 
 
@@ -269,6 +283,7 @@ date_diff()
 #   $6 -> Issuer of the certificate
 #   $7 -> Common Name
 #   $8 -> Serial Number
+#   $9 -> Subject Alternative Name
 #####################################################################
 prints()
 {
@@ -280,21 +295,32 @@ prints()
         MIN_DATE=$(echo "$4" | "${AWK}" '{ printf "%3s %2d %4d", $1, $2, $4 }')
         if [ "${NAGIOS}" = "TRUE" ]; then
             ${PRINTF} "%-35s %-17s %-8s %-11s %s\n" "$1:$2" "$6" "$3" "$MIN_DATE" "|days=$5"
+        elif [ "${CSV}" = "TRUE" ]; then
+            ${PRINTF} '"%s","%s","%s","%s",%4d\n' "$1:$2" "$6" "$3" "$MIN_DATE" "$5"
         else
             ${PRINTF} "%-35s %-17s %-8s %-11s %4d\n" "$1:$2" "$6" "$3" "$MIN_DATE" "$5"
         fi
     elif [ "${QUIET}" != "TRUE" ] && [ "${ISSUER}" = "TRUE" ] && [ "${VALIDATION}" = "TRUE" ]; then
-        ${PRINTF} "%-35s %-35s %-32s %-17s\n" "$1:$2" "$7" "$8" "$6"
-
+        if [ "${CSV}" = "TRUE" ]; then
+            ${PRINTF} '"%s","%s","%s","%s","%s","%s","%s","%d"\n' "$1" "$7" "$9" "$8" "$6" "$3" "$4" "$5"
+        else
+            ${PRINTF} "%-35s %-35s %-32s %-17s\n" "$1:$2" "$7" "$8" "$6"
+        fi
     elif [ "${QUIET}" != "TRUE" ] && [ "${VALIDATION}" != "TRUE" ]; then
         MIN_DATE=$(echo "$4" | "${AWK}" '{ printf "%3s %2d, %4d", $1, $2, $4 }')
         if [ "${NAGIOS}" = "TRUE" ]; then
             ${PRINTF} "%-47s %-12s %-12s %s\n" "$1:$2" "$3" "$MIN_DATE" "|days=$5"
+        elif [ "${CSV}" = "TRUE" ]; then
+            ${PRINTF} '"%s","%s","%s",%4d\n' "$1:$2" "$3" "$MIN_DATE" "$5"
         else
             ${PRINTF} "%-47s %-12s %-12s %4d\n" "$1:$2" "$3" "$MIN_DATE" "$5"
         fi
     elif [ "${QUIET}" != "TRUE" ] && [ "${VALIDATION}" = "TRUE" ]; then
-        ${PRINTF} "%-35s %-35s %-32s\n" "$1:$2" "$7" "$8"
+        if [ "${CSV}" = "TRUE" ]; then
+            ${PRINTF} '"%s","%s","%s"\n' "$1:$2" "$7" "$8"
+        else
+            ${PRINTF} "%-35s %-35s %-32s\n" "$1:$2" "$7" "$8"
+        fi
     fi
 }
 
@@ -308,20 +334,33 @@ print_heading()
 {
     if [ "${NOHEADER}" != "TRUE" ]; then
         if [ "${QUIET}" != "TRUE" ] && [ "${ISSUER}" = "TRUE" ] && [ "${NAGIOS}" != "TRUE" ] && [ "${VALIDATION}" != "TRUE" ]; then
-            ${PRINTF} "\n%-35s %-17s %-8s %-11s %-4s\n" "Host" "Issuer" "Status" "Expires" "Days"
-            echo "----------------------------------- ----------------- -------- ----------- ----"
-
+            if [ "${CSV}" != "TRUE" ]; then
+                ${PRINTF} "\n%-35s %-17s %-8s %-11s %-4s\n" "Host" "Issuer" "Status" "Expires" "Days"
+                echo "----------------------------------- ----------------- -------- ----------- ----"
+            else
+                ${PRINTF} '"%s","%s","%s","%s","%s"\n' "Host" "Issuer" "Status" "Expires" "Days"
+            fi
         elif [ "${QUIET}" != "TRUE" ] && [ "${ISSUER}" = "TRUE" ] && [ "${NAGIOS}" != "TRUE" ] && [ "${VALIDATION}" = "TRUE" ]; then
-            ${PRINTF} "\n%-35s %-35s %-32s %-17s\n" "Host" "Common Name" "Serial #" "Issuer"
-            echo "----------------------------------- ----------------------------------- -------------------------------- -----------------"
-
+            if [ "${CSV}" != "TRUE" ]; then
+                ${PRINTF} "\n%-35s %-35s %-32s %-17s\n" "Host" "Common Name" "Serial #" "Issuer"
+                echo "----------------------------------- ----------------------------------- -------------------------------- -----------------"
+            else
+                ${PRINTF} '"%s","%s","%s","%s","%s","%s","%s","%s"\n' "Host" "Common Name" "Subject Alternative Name" "Serial #" "Issuer" "Status" "Expires" "Days"
+            fi
         elif [ "${QUIET}" != "TRUE" ] && [ "${NAGIOS}" != "TRUE" ] && [ "${VALIDATION}" != "TRUE" ]; then
-            ${PRINTF} "\n%-47s %-12s %-12s %-4s\n" "Host" "Status" "Expires" "Days"
-            echo "----------------------------------------------- ------------ ------------ ----"
-
+            if [ "${CSV}" != "TRUE" ]; then
+                ${PRINTF} "\n%-47s %-12s %-12s %-4s\n" "Host" "Status" "Expires" "Days"
+                echo "----------------------------------------------- ------------ ------------ ----"
+            else
+                ${PRINTF} "%s,%s,%s,%s\n" "Host" "Status" "Expires" "Days"
+            fi
         elif [ "${QUIET}" != "TRUE" ] && [ "${NAGIOS}" != "TRUE" ] && [ "${VALIDATION}" = "TRUE" ]; then
-            ${PRINTF} "\n%-35s %-35s %-32s\n" "Host" "Common Name" "Serial #"
-            echo "----------------------------------- ----------------------------------- --------------------------------"
+            if [ "${CSV}" != "TRUE" ]; then
+                ${PRINTF} "\n%-35s %-35s %-32s\n" "Host" "Common Name" "Serial #"
+                echo "----------------------------------- ----------------------------------- --------------------------------"
+            else
+                ${PRINTF} "%s,%s,%s\n" "Host" "Common Name" "Serial #"
+            fi
         fi
     fi
 }
@@ -395,12 +434,13 @@ set_summary()
 ##########################################
 usage()
 {
-    echo "Usage: $0 [ -e email address ] [-E sender email address] [ -x days ] [-q] [-a] [-b] [-h] [-i] [-n] [-N] [-v]"
+    echo "Usage: $0 [ -e email address ] [-E sender email address] [ -x days ] [ -X secs ] [-q] [-a] [-b] [-h] [-i] [-n] [-N] [-v]"
     echo "       { [ -s common_name ] && [ -p port] } || { [ -f cert_file ] } || { [ -c cert file ] } || { [ -d cert dir ] }"
     echo ""
     echo "  -a                : Send a warning message through E-mail"
     echo "  -b                : Will not print header"
     echo "  -c cert file      : Print the expiration date for the PEM or PKCS12 formatted certificate in cert file"
+    echo "  -C                : CSV output"
     echo "  -d cert directory : Print the expiration date for the PEM or PKCS12 formatted certificates in cert directory"
     echo "  -e E-mail address : E-mail address to send expiration notices"
     echo "  -E E-mail sender  : E-mail address of the sender"
@@ -417,6 +457,7 @@ usage()
     echo "  -t type           : Specify the certificate type"
     echo "  -V                : Print version information"
     echo "  -x days           : Certificate expiration interval (eg. if cert_date < days)"
+    echo "  -X secs           : openssl timeout period in seconds"
     echo ""
 }
 
@@ -454,8 +495,11 @@ check_server_status() {
         OPTIONS="-connect ${1}:${2} -servername ${1} $TLSFLAG"
     fi
 
-    echo "" | "${OPENSSL}" s_client $OPTIONS 2> "${ERROR_TMP}" 1> "${CERT_TMP}"
-
+    if [ "${TIMEOUTSECS}" ]; then
+        echo "" | "${TIMEOUT}" "${TIMEOUTSECS}" "${OPENSSL}" s_client $OPTIONS 2> "${ERROR_TMP}" 1> "${CERT_TMP}"
+    else
+        echo "" | "${OPENSSL}" s_client $OPTIONS 2> "${ERROR_TMP}" 1> "${CERT_TMP}"
+    fi
     if "${GREP}" -i "Connection refused" "${ERROR_TMP}" > /dev/null; then
         prints "${1}" "${2}" "Connection refused" "Unknown"
         set_returncode 3
@@ -471,7 +515,7 @@ check_server_status() {
     elif "${GREP}" -i "ssl handshake failure" "${ERROR_TMP}" > /dev/null; then
         prints "${1}" "${2}" "SSL handshake failed" "Unknown"
         set_returncode 3
-    elif "${GREP}" -i "connect: Connection timed out" "${ERROR_TMP}" > /dev/null; then
+    elif "${GREP}" -i "connect:Connection timed out" "${ERROR_TMP}" > /dev/null; then
         prints "${1}" "${2}" "Connection timed out" "Unknown"
         set_returncode 3
     elif "${GREP}" -i "Name or service not known" "${ERROR_TMP}" > /dev/null; then
@@ -497,8 +541,7 @@ check_file_status() {
 
     ### Check to make sure the certificate file exists
     if [ ! -r "${CERTFILE}" ] || [ ! -s "${CERTFILE}" ]; then
-        echo "ERROR: The file named ${CERTFILE} is unreadable or doesn't exist"
-        echo "ERROR: Please check to make sure the certificate for ${HOST}:${PORT} is valid"
+        prints "$HOST" "$PORT" "Connection timed out" "Unknown" "0" "Unknown" "Unknown" "Unknown" "Unknown"
         set_returncode 3
         return
     fi
@@ -516,13 +559,17 @@ check_file_status() {
 
         # Extract the issuer from the certificate
         CERTISSUER=$("${OPENSSL}" x509 -in "${CERT_TMP}" -issuer -noout | \
-                     "${AWK}" 'BEGIN {RS=", " } $0 ~ /^O =/
-                                 { print substr($0,5,17)}')
+                    "${SED}" 's/.*CN=//')
 
         ### Grab the common name (CN) from the X.509 certificate
         COMMONNAME=$("${OPENSSL}" x509 -in "${CERT_TMP}" -subject -noout | \
-                     "${SED}" -e 's/.*CN = //' | \
-                     "${SED}" -e 's/, .*//')
+                    "${SED}" -e 's/.*CN *= *//' | \
+                    "${SED}" -e 's/, .*//')
+
+        # Grab the subject alternative name from the certificate
+        SUBJALTNAME=$("${OPENSSL}" x509 -in "${CERT_TMP}" -text -noout | \
+                    "${GREP}" 'DNS:' | \
+                    "${SED}" -e 's/^ *//')
 
         ### Grab the serial number from the X.509 certificate
         SERIAL=$("${OPENSSL}" x509 -in "${CERT_TMP}" -serial -noout | \
@@ -534,12 +581,17 @@ check_file_status() {
 
         # Extract the issuer from the certificate
         CERTISSUER=$("${OPENSSL}" x509 -in "${CERTFILE}" -issuer -noout -inform "${CERTTYPE}" | \
-                     "${AWK}" 'BEGIN {RS=", " } $0 ~ /^O =/ { print substr($0,5,17)}')
+                    "${SED}" 's/.*CN=//')
 
         ### Grab the common name (CN) from the X.509 certificate
         COMMONNAME=$("${OPENSSL}" x509 -in "${CERTFILE}" -subject -noout -inform "${CERTTYPE}" | \
-                     "${SED}" -e 's/.*CN = //' | \
-                     "${SED}" -e 's/, .*//')
+                    "${SED}" -e 's/.*CN *= *//' | \
+                    "${SED}" -e 's/, .*//')
+
+        # Grab the subject alternative name from the certificate
+        SUBJALTNAME=$("${OPENSSL}" x509 -in "${CERT_TMP}" -text -noout -inform "${CERTTYPE}" | \
+                    "${GREP}" 'DNS:' | \
+                    "${SED}" -e 's/^ *//')
 
         ### Grab the serial number from the X.509 certificate
         SERIAL=$("${OPENSSL}" x509 -in "${CERTFILE}" -serial -noout -inform "${CERTTYPE}" | \
@@ -553,6 +605,7 @@ check_file_status() {
     # Convert the date to seconds, and get the diff between NOW and the expiration date
     CERTJULIAN=$(date2julian "${MONTH#0}" "${2#0}" "${4}")
     CERTDIFF=$(date_diff "${NOWJULIAN}" "${CERTJULIAN}")
+    CERTSTATUS="Valid"
 
     if [ "${CERTDIFF}" -lt 0 ]; then
         if [ "${ALARM}" = "TRUE" ]; then
@@ -560,7 +613,7 @@ check_file_status() {
                 "The SSL certificate for ${HOST} \"(CN: ${COMMONNAME})\" has expired!"
         fi
 
-        prints "${HOST}" "${PORT}" "Expired" "${CERTDATE}" "${CERTDIFF}" "${CERTISSUER}" "${COMMONNAME}" "${SERIAL}"
+        CERTSTATUS="Expired"
         RETCODE_LOCAL=2
 
     elif [ "${CERTDIFF}" -lt "${WARNDAYS}" ]; then
@@ -568,14 +621,22 @@ check_file_status() {
             send_mail "${SENDER}" "${ADMIN}" "Certificate for ${HOST} \"(CN: ${COMMONNAME})\" will expire in ${CERTDIFF} days or less" \
                 "The SSL certificate for ${HOST} \"(CN: ${COMMONNAME})\" will expire on ${CERTDATE}"
         fi
-        prints "${HOST}" "${PORT}" "Expiring" "${CERTDATE}" "${CERTDIFF}" "${CERTISSUER}" "${COMMONNAME}" "${SERIAL}"
+        CERTSTATUS="Expiring"
         RETCODE_LOCAL=1
 
+    elif [ "${HOST}" != ${COMMONNAME} ]; then
+        SITETOPLEVEL=$(echo "${HOST}" | "${SED}" -e 's/[a-z0-9]*\./\*\./I')
+        if [[ "${SUBJALTNAME}" =~ "${SITETOPLEVEL}" ]]; then
+            CERTSTATUS="Valid (Wildcard)"
+            RETCODE_LOCAL=0
+        else 
+            CERTSTATUS="CN Mismatch"
+            RETCODE_LOCAL=3
+        fi
     else
-        prints "${HOST}" "${PORT}" "Valid" "${CERTDATE}" "${CERTDIFF}" "${CERTISSUER}" "${COMMONNAME}" "${SERIAL}"
         RETCODE_LOCAL=0
     fi
-
+    prints "${HOST}" "${PORT}" "${CERTSTATUS}" "${CERTDATE}" "${CERTDIFF}" "${CERTISSUER}" "${COMMONNAME}" "${SERIAL}" "${SUBJALTNAME}"
     set_returncode "${RETCODE_LOCAL}"
     MIN_DATE=$(echo "${CERTDATE}" | "${AWK}" '{ print $1, $2, $4 }')
     set_summary "${RETCODE_LOCAL}" "${HOST}" "${PORT}" "${MIN_DATE}" "${CERTDIFF}"
@@ -584,12 +645,13 @@ check_file_status() {
 #################################
 ### Start of main program
 #################################
-while getopts abc:d:e:E:f:hik:nNp:qs:St:Vx: option
+while getopts abc:Cd:e:E:f:hik:nNp:qs:St:Vx:X: option
 do
     case "${option}" in
         a) ALARM="TRUE";;
         b) NOHEADER="TRUE";;
         c) CERTFILE=${OPTARG};;
+        C) CSV="TRUE";;
         d) CERTDIRECTORY=${OPTARG};;
         e) ADMIN=${OPTARG};;
         E) SENDER=${OPTARG};;
@@ -610,6 +672,7 @@ do
            exit 0
         ;;
         x) WARNDAYS=$OPTARG;;
+        X) TIMEOUTSECS=$OPTARG;;
        \?) usage
            exit 1;;
     esac
@@ -697,13 +760,13 @@ elif [ -f "${SERVERFILE}" ]; then
     IFS=$'\n'
     for LINE in $(grep -E -v '(^#|^$)' "${SERVERFILE}")
     do
-        HOST=${LINE%% *}
-        PORT=${LINE##* }
+        HOST=${LINE%%:*}
+        PORT=${LINE##*:}
         IFS=" "
-        if [ "$PORT" = "FILE" ]; then
-            check_file_status "${HOST}" "FILE" "${HOST}"
+        if [ "$PORT" = "$HOST" ]; then
+            check_server_status "${HOST}" "443"
         else
-            check_server_status "${HOST}" "${PORT}"
+            check_server_status "${HOST}" "${PORT:=443}"
         fi
     done
     IFS="${OLDIFS}"
