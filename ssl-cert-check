@@ -1,242 +1,22 @@
 #!/usr/bin/env bash
-PROGRAMVERSION=4.14
+PROGRAMVERSION=5.0
 #
 # Program: SSL Certificate Check <ssl-cert-check>
 #
-# Source code home: https://github.com/Matty9191/ssl-cert-check
+# Source code home: https://github.com/Foundation-CCC/ssl-cert-check
 #
 # Documentation: http://prefetch.net/articles/checkcertificate.html
 #
+# Maintainer: Chris Chan < cchan at foundationccc dot org >
+#
 # Author: Matty < matty at prefetch dot net >
 #
-# Last Updated: 11-12-2020
+# Last Updated: 09-18-2023
 #
-# Revision History:
+# FCCC Revision History
 #
-# Version 4.14
-#  - Fixed HOST / PORT discovery @mhow2
-#
-# Version 4.13
-#  - Reverted the file checking logic which breaks $RETCODE
-#
-# Version 4.12
-#  - Fixed various logic errors and typos -- Daniel Lewart
-#
-# Version 4.10
-#  - Replace tabs with spaces
-#  - More shllcheck cleanup work
-#  - Remove unused DEBUG variable
-#  - Fixed an innocuous whitespace bug in TLSFLAG variable creation
-#  - Set the default TLS version to 1.1 (can be overridden with -v)
-#  - Switched openssl CLI options to use an array. The reasons why
-#    are documented here: http://mywiki.wooledge.org/BashFAQ/050
-#
-# Version 4.9
-#  - Add a signal handler to call the cleanup funtion
-#    if the script doesn't exit() cleanly -- Timothe Litt
-#
-# Version 4.8
-#  - More mail client fixes
-#
-# Version 4.7
-#  - Revert SENDER to ""
-#  - More shellcheck cleanup
-#
-# Version 4.6
-#  - Fixed programming logic error
-#
-# Version 4.5
-#  - Re-work mailx support for FreeBSD
-#  - More shellcheck fixes
-#
-# Version 4.4
-#  - Use command -v instead of which utility to satisfy shellcheck.
-#  - Fix unquoted MAIL and MAILMODE variables in help output
-#  - More shellcheck fixes
-#
-# Version 4.3
-#  - Fixed a typo in the program version
-#
-# Version 4.2
-#  - Change CERTDAYS to CERTDIFF in the e-mail subject.
-#
-# Version 4.1
-#  - Fix usage output
-#
-# Version 4.0
-#  - Updated the script syntax to align with UNIX shell programming
-#  - Check for DNS resolution failures
-#  - First round of updates to make shellcheck happy
-#  - Rework the logic to call mailx.
-#  - Print the version with the "-V" option.
-#  - Define the version in the PROGRAMVERSION variable
-#
-# Version 3.31
-#  - Fixed the test for the -servername flag -- Kitson Consulting.
-#
-# Version 3.30
-#  - Use highest returncode for Nagios output -- Marcel Pennewiss
-#  - Set RETCODE to 3 (unknown) if a certificate file does not exist -- Marcel Pennewiss
-#  - Add a "-d" option to specify a directory or file mask pattern -- Marcel Pennewiss
-#  - Add a "-N" option to create summarized Nagios output -- Marcel Pennewiss
-#  - Cleaned up many formatting -- Marcel Pennewiss
-#
-# Versione 3.29a
-#  - Added option to specify email sender address
-#
-# Version 3.29
-#  - Add the openssl -servername flag if it shows up in help.
-#
-# Version 3.28
-#  - Added a DEBUG option to assist with debugging folks who use the script
-#
-# Version 3.27
-#  - Allow white spaces to exist in the certificate file list
-#  - Add an additional check to pick up bad / non-existent certificates
-#  - Add a check to look for the existence of a mail program. Error out if it's not present.
-#  - Enable the TLS -servername extension by default - Juergen Knaack & Johan Denoyer
-#
-# Version 3.26
-#  - Allow the certificate type (PEM, DER, NET) to be passed on the command line
-#
-# Version 3.25
-#   - Check for "no route to host" errors -- Dan Doyle
-#   - Set RETCODE to 3 (unknown) if a connection error occurs -- Dan Doyle
-#   - Documentation fixes
-#
-# Version 3.24
-#   - Utilize the -clcerts option to limit the results to client certificates - Eitan Katznelson
-#
-# Version 3.23
-#   - Fixed typo in date2julian routine -- Ken Cook
-#
-# Version 3.22
-#   - Change the validation option to "-V"
-#   - Add a "-v" option to specify a specific protocol version (ssl2, ssl3 or tls)
-#
-# Version 3.21
-#   - Adjust e-mail checking to avoid exiting if notifications aren't enabled -- Nick Anderson
-#   - Added the number of days until expiration to the Nagios output -- Nick Anderson
-#
-# Version 3.20
-#   - Fixed a bug in certificate length checking -- Tim Nowaczyk
-#
-# Version 3.19
-#   - Added check to verify the certificate retrieved is valid
-#
-# Version 3.18
-#   - Add support for connecting to FTP servers -- Paul A Sand
-#
-# Version 3.17
-#   - Add support for connecting to imap servers -- Joerg Pareigis
-#
-# Version 3.16
-#   - Add support for connecting to the mail sbmission port -- Luis E. Munoz
-#
-# Version 3.15
-#   - Adjusted the file checking logic to use the correct certificate -- Maciej Szudejko
-#   - Add sbin to the default search paths for OpenBSD compatibility -- Alex Popov
-#   - Use cut instead of substring processing to ensure compatibility -- Alex Popov
-#
-# Version 3.14
-#   - Fixed the Common Name parser to handle DN's where the CN is not the last item
-#     eg. EmailAddr -- Jason Brothers
-#   - Added the ability to grab the serial number -- Jason Brothers
-#   - Added the "-b" option to print results without a header -- Jason Brothers
-#   - Added the "-v" option for certificate validation -- Jason Brothers
-#
-# Version 3.13
-#   - Updated the subject line to include the hostname as well as
-#     the common name embedded in the X509 certificate (if it's
-#     available) -- idea proposed by Mike Burns
-#
-#  Version 3.12
-#   - Updated the license to allow redistribution and modification
-#
-#  Version 3.11
-#   - Added ability to comment out lines in files passed
-#     to the "-f" option -- Brett Stauner
-#   - Fixed comment next to file processing logic
-#
-#  Version 3.10
-#   - Fixed POP3 port -- Simon Matter
-#
-#  Version 3.9
-#    - Switched binary location logic to use which utility
-#
-#  Version 3.8
-#    - Fixed display on 80 column displays
-#    - Cleaned up the formatting
-#
-#  Version 3.7
-#    - Fixed bug in NAGIOS tests -- Ben Allen
-#
-#  Version 3.6
-#    - Added support for certificates stored in PKCS#12 databases -- Ken Gallo
-#    - Cleaned up comments
-#    - Adjusted variables to be more consistent
-#
-#  Version 3.5
-#    - Added support for NAGIOS -- Quanah Gibson-Mount
-#    - Added additional checks for mail -- Quanah Gibson-Mount
-#    - Convert tabs to spaces -- Quanah Gibson-Mount
-#    - Cleaned up usage() routine
-#    - Added additional checks for openssl
-#
-#  Version 3.4
-#   - Added a missing "{" to line 364 -- Ken Gallo
-#   - Move mktemp to the start of the main body to avoid errors
-#   - Adjusted default binary paths to make sure the script just works
-#     w/ Solaris, BSD and Linux hosts
-#
-#  Version 3.3
-#   - Added common name from X.509 certificate file to E-mail body / header -- Doug Curtis
-#   - Fixed several documentation errors
-#   - Use mktemp to create temporary files
-#   - Convert printf, sed and awk to variables
-#   - Check for printf, sed, awk and mktemp binaries
-#   - Add additional logic to make sure mktemp returned a valid temporary file
-#
-#  Version 3.2
-#   - Added option to list certificates in the file passed to "-f".
-#
-#  Version 3.1
-#   - Added handling for starttls for smtp -- Marco Amrein
-#   - Added handling for starttls for pop3 (without s) -- Marco Amrein
-#   - Removed extra spacing at end of script
-#
-#  Version 3.0
-#   - Added "-i" option to print certificate issuer
-#   - Removed $0 from Subject line of outbound e-mails
-#   - Fixed some typographical errors
-#   - Removed redundant "-b" option
-#
-#  Version 2.0
-#    - Fixed an issue with e-mails formatting incorrectly
-#    - Added additional space to host column -- Darren-Perot Spruell
-#    - Replaced GNU date dependency with CHRIS F. A. JOHNSON's
-#      date2julian shell function. This routine can be found on
-#      page 170 of Chris's book "Shell Scripting Recipes: A
-#      Problem-Solution Approach," ISBN #1590594711. Julian function
-#      was created based on a post to comp.unix.shell by Tapani Tarvainen.
-#    - Cleaned up function descriptions
-#    - Removed several lines of redundant code
-#    - Adjusted the help message
-#
-#   Version 1.1
-#    - Added "-c" flag to report expiration status of a PEM encoded
-#      certificate -- Hampus Lundqvist
-#    - Updated the prints messages to display the reason a connection
-#      failed (connection refused, connection timeout, bad cert, etc)
-#    - Updated the GNU date checking routines
-#    - Added checks for each binary required
-#    - Added checks for connection timeouts
-#    - Added checks for GNU date
-#    - Added a "-h" option
-#    - Cleaned up the documentation
-#
-#  Version 1.0
-#      Initial Release
+# Version 5.0
+#  - Forked from https://github.com/Matty9191/ssl-cert-check
 #
 # Purpose:
 #  ssl-cert-check checks to see if a digital certificate in X.509 format
@@ -953,3 +733,231 @@ if [ "${NAGIOS}" = "TRUE" ]; then
 else
     exit 0
 fi
+
+# Additional Revision History:
+#
+# Version 4.14
+#  - Fixed HOST / PORT discovery @mhow2
+#
+# Version 4.13
+#  - Reverted the file checking logic which breaks $RETCODE
+#
+# Version 4.12
+#  - Fixed various logic errors and typos -- Daniel Lewart
+#
+# Version 4.10
+#  - Replace tabs with spaces
+#  - More shllcheck cleanup work
+#  - Remove unused DEBUG variable
+#  - Fixed an innocuous whitespace bug in TLSFLAG variable creation
+#  - Set the default TLS version to 1.1 (can be overridden with -v)
+#  - Switched openssl CLI options to use an array. The reasons why
+#    are documented here: http://mywiki.wooledge.org/BashFAQ/050
+#
+# Version 4.9
+#  - Add a signal handler to call the cleanup funtion
+#    if the script doesn't exit() cleanly -- Timothe Litt
+#
+# Version 4.8
+#  - More mail client fixes
+#
+# Version 4.7
+#  - Revert SENDER to ""
+#  - More shellcheck cleanup
+#
+# Version 4.6
+#  - Fixed programming logic error
+#
+# Version 4.5
+#  - Re-work mailx support for FreeBSD
+#  - More shellcheck fixes
+#
+# Version 4.4
+#  - Use command -v instead of which utility to satisfy shellcheck.
+#  - Fix unquoted MAIL and MAILMODE variables in help output
+#  - More shellcheck fixes
+#
+# Version 4.3
+#  - Fixed a typo in the program version
+#
+# Version 4.2
+#  - Change CERTDAYS to CERTDIFF in the e-mail subject.
+#
+# Version 4.1
+#  - Fix usage output
+#
+# Version 4.0
+#  - Updated the script syntax to align with UNIX shell programming
+#  - Check for DNS resolution failures
+#  - First round of updates to make shellcheck happy
+#  - Rework the logic to call mailx.
+#  - Print the version with the "-V" option.
+#  - Define the version in the PROGRAMVERSION variable
+#
+# Version 3.31
+#  - Fixed the test for the -servername flag -- Kitson Consulting.
+#
+# Version 3.30
+#  - Use highest returncode for Nagios output -- Marcel Pennewiss
+#  - Set RETCODE to 3 (unknown) if a certificate file does not exist -- Marcel Pennewiss
+#  - Add a "-d" option to specify a directory or file mask pattern -- Marcel Pennewiss
+#  - Add a "-N" option to create summarized Nagios output -- Marcel Pennewiss
+#  - Cleaned up many formatting -- Marcel Pennewiss
+#
+# Versione 3.29a
+#  - Added option to specify email sender address
+#
+# Version 3.29
+#  - Add the openssl -servername flag if it shows up in help.
+#
+# Version 3.28
+#  - Added a DEBUG option to assist with debugging folks who use the script
+#
+# Version 3.27
+#  - Allow white spaces to exist in the certificate file list
+#  - Add an additional check to pick up bad / non-existent certificates
+#  - Add a check to look for the existence of a mail program. Error out if it's not present.
+#  - Enable the TLS -servername extension by default - Juergen Knaack & Johan Denoyer
+#
+# Version 3.26
+#  - Allow the certificate type (PEM, DER, NET) to be passed on the command line
+#
+# Version 3.25
+#   - Check for "no route to host" errors -- Dan Doyle
+#   - Set RETCODE to 3 (unknown) if a connection error occurs -- Dan Doyle
+#   - Documentation fixes
+#
+# Version 3.24
+#   - Utilize the -clcerts option to limit the results to client certificates - Eitan Katznelson
+#
+# Version 3.23
+#   - Fixed typo in date2julian routine -- Ken Cook
+#
+# Version 3.22
+#   - Change the validation option to "-V"
+#   - Add a "-v" option to specify a specific protocol version (ssl2, ssl3 or tls)
+#
+# Version 3.21
+#   - Adjust e-mail checking to avoid exiting if notifications aren't enabled -- Nick Anderson
+#   - Added the number of days until expiration to the Nagios output -- Nick Anderson
+#
+# Version 3.20
+#   - Fixed a bug in certificate length checking -- Tim Nowaczyk
+#
+# Version 3.19
+#   - Added check to verify the certificate retrieved is valid
+#
+# Version 3.18
+#   - Add support for connecting to FTP servers -- Paul A Sand
+#
+# Version 3.17
+#   - Add support for connecting to imap servers -- Joerg Pareigis
+#
+# Version 3.16
+#   - Add support for connecting to the mail sbmission port -- Luis E. Munoz
+#
+# Version 3.15
+#   - Adjusted the file checking logic to use the correct certificate -- Maciej Szudejko
+#   - Add sbin to the default search paths for OpenBSD compatibility -- Alex Popov
+#   - Use cut instead of substring processing to ensure compatibility -- Alex Popov
+#
+# Version 3.14
+#   - Fixed the Common Name parser to handle DN's where the CN is not the last item
+#     eg. EmailAddr -- Jason Brothers
+#   - Added the ability to grab the serial number -- Jason Brothers
+#   - Added the "-b" option to print results without a header -- Jason Brothers
+#   - Added the "-v" option for certificate validation -- Jason Brothers
+#
+# Version 3.13
+#   - Updated the subject line to include the hostname as well as
+#     the common name embedded in the X509 certificate (if it's
+#     available) -- idea proposed by Mike Burns
+#
+#  Version 3.12
+#   - Updated the license to allow redistribution and modification
+#
+#  Version 3.11
+#   - Added ability to comment out lines in files passed
+#     to the "-f" option -- Brett Stauner
+#   - Fixed comment next to file processing logic
+#
+#  Version 3.10
+#   - Fixed POP3 port -- Simon Matter
+#
+#  Version 3.9
+#    - Switched binary location logic to use which utility
+#
+#  Version 3.8
+#    - Fixed display on 80 column displays
+#    - Cleaned up the formatting
+#
+#  Version 3.7
+#    - Fixed bug in NAGIOS tests -- Ben Allen
+#
+#  Version 3.6
+#    - Added support for certificates stored in PKCS#12 databases -- Ken Gallo
+#    - Cleaned up comments
+#    - Adjusted variables to be more consistent
+#
+#  Version 3.5
+#    - Added support for NAGIOS -- Quanah Gibson-Mount
+#    - Added additional checks for mail -- Quanah Gibson-Mount
+#    - Convert tabs to spaces -- Quanah Gibson-Mount
+#    - Cleaned up usage() routine
+#    - Added additional checks for openssl
+#
+#  Version 3.4
+#   - Added a missing "{" to line 364 -- Ken Gallo
+#   - Move mktemp to the start of the main body to avoid errors
+#   - Adjusted default binary paths to make sure the script just works
+#     w/ Solaris, BSD and Linux hosts
+#
+#  Version 3.3
+#   - Added common name from X.509 certificate file to E-mail body / header -- Doug Curtis
+#   - Fixed several documentation errors
+#   - Use mktemp to create temporary files
+#   - Convert printf, sed and awk to variables
+#   - Check for printf, sed, awk and mktemp binaries
+#   - Add additional logic to make sure mktemp returned a valid temporary file
+#
+#  Version 3.2
+#   - Added option to list certificates in the file passed to "-f".
+#
+#  Version 3.1
+#   - Added handling for starttls for smtp -- Marco Amrein
+#   - Added handling for starttls for pop3 (without s) -- Marco Amrein
+#   - Removed extra spacing at end of script
+#
+#  Version 3.0
+#   - Added "-i" option to print certificate issuer
+#   - Removed $0 from Subject line of outbound e-mails
+#   - Fixed some typographical errors
+#   - Removed redundant "-b" option
+#
+#  Version 2.0
+#    - Fixed an issue with e-mails formatting incorrectly
+#    - Added additional space to host column -- Darren-Perot Spruell
+#    - Replaced GNU date dependency with CHRIS F. A. JOHNSON's
+#      date2julian shell function. This routine can be found on
+#      page 170 of Chris's book "Shell Scripting Recipes: A
+#      Problem-Solution Approach," ISBN #1590594711. Julian function
+#      was created based on a post to comp.unix.shell by Tapani Tarvainen.
+#    - Cleaned up function descriptions
+#    - Removed several lines of redundant code
+#    - Adjusted the help message
+#
+#   Version 1.1
+#    - Added "-c" flag to report expiration status of a PEM encoded
+#      certificate -- Hampus Lundqvist
+#    - Updated the prints messages to display the reason a connection
+#      failed (connection refused, connection timeout, bad cert, etc)
+#    - Updated the GNU date checking routines
+#    - Added checks for each binary required
+#    - Added checks for connection timeouts
+#    - Added checks for GNU date
+#    - Added a "-h" option
+#    - Cleaned up the documentation
+#
+#  Version 1.0
+#      Initial Release
+#
