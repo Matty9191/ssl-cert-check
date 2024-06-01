@@ -13,6 +13,12 @@ PROGRAMVERSION=4.14
 #
 # Revision History:
 #
+# Unreleased
+#  - Fix '-f', '-c', und '-d' options without '-s', but HOST environment
+#    variable defined - Herbert Graeber
+#  - Allow process substitution for '-s' option -- Herbert Graeber
+#  - Relax with space handling in server files -- Herbert Graeber
+#
 # Version 4.14
 #  - Fixed HOST / PORT discovery @mhow2
 #
@@ -903,43 +909,44 @@ else
     exit 1
 fi
 
-### If a HOST was passed on the cmdline, use that value
-if [ "${HOST}" != "" ]; then
-    print_heading
-    check_server_status "${HOST}" "${PORT:=443}"
-    print_summary
 ### If a file is passed to the "-f" option on the command line, check
 ### each certificate or server / port combination in the file to see if
 ### they are about to expire
-elif [ -f "${SERVERFILE}" ]; then
+if [ -n "${SERVERFILE}" ]; then
     print_heading
 
-    IFS=$'\n'
-    for LINE in $(grep -E -v '(^#|^$)' "${SERVERFILE}")
+    grep -E -v '(^#|^[[:space:]]*$)' "${SERVERFILE}" | while read HOST PORT
     do
-        HOST=${LINE%% *}
-        PORT=${LINE##* }
-        IFS=" "
         if [ "$PORT" = "FILE" ]; then
             check_file_status "${HOST}" "FILE" "${HOST}"
         else
             check_server_status "${HOST}" "${PORT}"
         fi
     done
-    IFS="${OLDIFS}"
-    print_summary
+    if [ ${PIPESTATUS[0]} != 0 ]
+    then
+        echo "Error opening ${SERVERFILE}"
+    else
+        print_summary
+    fi
+
 ### Check to see if the certificate in CERTFILE is about to expire
-elif [ "${CERTFILE}" != "" ]; then
+elif [ -n "${CERTFILE}" ]; then
     print_heading
     check_file_status "${CERTFILE}" "FILE" "${CERTFILE}"
     print_summary
 
 ### Check to see if the certificates in CERTDIRECTORY are about to expire
-elif [ "${CERTDIRECTORY}" != "" ] && ("${FIND}" -L "${CERTDIRECTORY}" -type f > /dev/null 2>&1); then
+elif [ -n "${CERTDIRECTORY}" ] && ("${FIND}" -L "${CERTDIRECTORY}" -type f > /dev/null 2>&1); then
     print_heading
     for FILE in $("${FIND}" -L "${CERTDIRECTORY}" -type f); do
         check_file_status "${FILE}" "FILE" "${FILE}"
     done
+    print_summary
+### If a HOST was passed on the cmdline, use that value
+elif [ -n "${HOST}" ]; then
+    print_heading
+    check_server_status "${HOST}" "${PORT:=443}"
     print_summary
 ### There was an error, so print a detailed usage message and exit
 else
