@@ -632,7 +632,7 @@ usage()
     echo "  -N                : Run as a Nagios plugin and output one line summary (implies -n, requires -f or -d)"
     echo "  -p port           : Port to connect to (interactive mode)"
     echo "  -q                : Don't print anything on the console"
-    echo "  -s common name   : Server to connect to (interactive mode)"
+    echo "  -s common name    : Server to connect to (interactive mode)"
     echo "  -S                : Print validation information"
     echo "  -t type           : Specify the certificate type"
     echo "  -V                : Print version information"
