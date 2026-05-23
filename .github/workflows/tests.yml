@@ -1,0 +1,55 @@
+name: Tests
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - ssl-cert-check
+      - tests/**
+      - .github/workflows/tests.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Shell and Bats Tests
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DEBIAN_FRONTEND: noninteractive
+
+    defaults:
+      run:
+        shell: bash --noprofile --norc -euo pipefail {0}
+
+    steps:
+      - name: Check out trusted master commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Install test dependencies
+        run: |
+          if ! command -v bats >/dev/null || ! command -v shellcheck >/dev/null || ! command -v openssl >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends bats shellcheck openssl
+          fi
+
+      - name: Verify script syntax
+        run: bash -n ssl-cert-check
+
+      - name: Run ShellCheck
+        run: |
+          shellcheck ssl-cert-check
+          shellcheck tests/ssl_cert_check.bats
+
+      - name: Run Bats test suite
+        run: bats tests

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-PROGRAMVERSION=4.14
+PROGRAMVERSION=5.0
 #
 # Program: SSL Certificate Check <ssl-cert-check>
 #
@@ -9,9 +9,14 @@ PROGRAMVERSION=4.14
 #
 # Author: Matty < matty at prefetch dot net >
 #
-# Last Updated: 11-12-2020
+# Last Updated: 05-23-202r60
 #
 # Revision History:
+#
+# Version 5.0
+#  - Cleanup shellcheck findings
+#  - Fix a number of edge cases 
+#  - CLeanup code layout
 #
 # Version 4.14
 #  - Fixed HOST / PORT discovery @mhow2
@@ -312,17 +317,23 @@ PKCSDBPASSWD=""
 CERTTYPE="pem"
 
 # Location of system binaries
-AWK=$(command -v awk)
-DATE=$(command -v date)
-GREP=$(command -v grep)
-OPENSSL=$(command -v openssl)
-PRINTF=$(command -v printf)
-SED=$(command -v sed)
-MKTEMP=$(command -v mktemp)
-FIND=$(command -v find)
+AWK=${AWK:-$(command -v awk)}
+DATE=${DATE:-$(command -v date)}
+GREP=${GREP:-$(command -v grep)}
+OPENSSL=${OPENSSL:-$(command -v openssl)}
+PRINTF=${PRINTF:-$(command -v printf)}
+SED=${SED:-$(command -v sed)}
+MKTEMP=${MKTEMP:-$(command -v mktemp)}
+FIND=${FIND:-$(command -v find)}
+TIMEOUT=${TIMEOUT:-$(command -v timeout)}
+
+# Maximum number of seconds to wait for a remote TLS handshake
+TIMEOUT_SECONDS=${TIMEOUT_SECONDS:-15}
 
 # Try to find a mail client
-if [ -f /usr/bin/mailx ]; then
+if [ -n "${MAIL:-}" ] && [ -n "${MAILMODE:-}" ]; then
+    :
+elif [ -f /usr/bin/mailx ]; then
     MAIL="/usr/bin/mailx"
     MAILMODE="mailx"
 elif [ -f /bin/mail ]; then
@@ -352,6 +363,7 @@ RETCODE=0
 SUMMARY_VALID=0
 SUMMARY_WILL_EXPIRE=0
 SUMMARY_EXPIRED=0
+SUMMARY_UNKNOWN=0
 SUMMARY_MIN_DIFF=0
 SUMMARY_MIN_DATE=
 SUMMARY_MIN_HOST=
@@ -365,13 +377,14 @@ umask 077
 # Purpose: Remove temporary files if the script doesn't
 #          exit() cleanly
 #####################################################
+# shellcheck disable=SC2329 # Invoked indirectly by trap.
 cleanup() {
-    if [ -f "${CERT_TMP}" ]; then
+    if [ -n "${CERT_TMP:-}" ] && [ -f "${CERT_TMP}" ]; then
         rm -f "${CERT_TMP}"
     fi
 
-    if [ -f "${ERROR_TMP}" ]; then
-     rm -f "${ERROR_TMP}"
+    if [ -n "${ERROR_TMP:-}" ] && [ -f "${ERROR_TMP}" ]; then
+        rm -f "${ERROR_TMP}"
     fi
 }
 
@@ -388,8 +401,10 @@ send_mail() {
 
     FROM="${1}"
     TO="${2}"
-    SUBJECT="${3}"
+    SUBJECT=$(printf "%s" "${3}" | tr -d '\r\n')
     MSG="${4}"
+    FROM=$(printf "%s" "${FROM}" | tr -d '\r\n')
+    TO=$(printf "%s" "${TO}" | tr -d '\r\n')
 
     case "${MAILMODE}" in
         "mail")
@@ -401,7 +416,7 @@ send_mail() {
         "sendmail")
             (echo "Subject:$SUBJECT" && echo "TO:$TO" && echo "FROM:$FROM" && echo "$MSG") | "${MAIL}" "$TO"
             ;;
-        "*")
+        *)
             echo "ERROR: You enabled automated alerts, but the mail binary could not be found."
             echo "FIX: Please modify the \${MAIL} and \${MAILMODE} variable in the program header."
             exit 1
@@ -497,7 +512,12 @@ prints()
     fi
 
     if [ "${QUIET}" != "TRUE" ] && [ "${ISSUER}" = "TRUE" ] && [ "${VALIDATION}" != "TRUE" ]; then
-        MIN_DATE=$(echo "$4" | "${AWK}" '{ printf "%3s %2d %4d", $1, $2, $4 }')
+        if [ "$4" = "Unknown" ]; then
+            MIN_DATE="Unknown"
+        else
+            read -r EXPIRE_MONTH EXPIRE_DAY _ EXPIRE_YEAR _ <<< "$4"
+            printf -v MIN_DATE "%3s %2d %4d" "${EXPIRE_MONTH}" "${EXPIRE_DAY}" "${EXPIRE_YEAR}"
+        fi
         if [ "${NAGIOS}" = "TRUE" ]; then
             ${PRINTF} "%-35s %-17s %-8s %-11s %s\n" "$1:$2" "$6" "$3" "$MIN_DATE" "|days=$5"
         else
@@ -507,7 +527,12 @@ prints()
         ${PRINTF} "%-35s %-35s %-32s %-17s\n" "$1:$2" "$7" "$8" "$6"
 
     elif [ "${QUIET}" != "TRUE" ] && [ "${VALIDATION}" != "TRUE" ]; then
-        MIN_DATE=$(echo "$4" | "${AWK}" '{ printf "%3s %2d, %4d", $1, $2, $4 }')
+        if [ "$4" = "Unknown" ]; then
+            MIN_DATE="Unknown"
+        else
+            read -r EXPIRE_MONTH EXPIRE_DAY _ EXPIRE_YEAR _ <<< "$4"
+            printf -v MIN_DATE "%3s %2d, %4d" "${EXPIRE_MONTH}" "${EXPIRE_DAY}" "${EXPIRE_YEAR}"
+        fi
         if [ "${NAGIOS}" = "TRUE" ]; then
             ${PRINTF} "%-47s %-12s %-12s %s\n" "$1:$2" "$3" "$MIN_DATE" "|days=$5"
         else
@@ -557,7 +582,10 @@ print_summary()
         return
     fi
 
-    if [ ${SUMMARY_WILL_EXPIRE} -eq 0 ] && [ ${SUMMARY_EXPIRED} -eq 0 ]; then
+    if [ ${SUMMARY_UNKNOWN} -ne 0 ]; then
+        ${PRINTF} "%s certificate check(s) failed (%s:%s %s)|days=%s\n" "${SUMMARY_UNKNOWN}" "${SUMMARY_MIN_HOST}" "${SUMMARY_MIN_PORT}" "${SUMMARY_MIN_DATE}" "${SUMMARY_MIN_DIFF}"
+
+    elif [ ${SUMMARY_WILL_EXPIRE} -eq 0 ] && [ ${SUMMARY_EXPIRED} -eq 0 ]; then
         ${PRINTF} "%s valid certificate(s)|days=%s\n" "${SUMMARY_VALID}" "${SUMMARY_MIN_DIFF}"
 
     elif [ ${SUMMARY_EXPIRED} -ne 0 ]; then
@@ -596,16 +624,57 @@ set_summary()
         SUMMARY_VALID=$((SUMMARY_VALID+1))
     elif [ "${1}" -eq 1 ]; then
         SUMMARY_WILL_EXPIRE=$((SUMMARY_WILL_EXPIRE+1))
-    else
+    elif [ "${1}" -eq 2 ]; then
         SUMMARY_EXPIRED=$((SUMMARY_EXPIRED+1))
+    else
+        SUMMARY_UNKNOWN=$((SUMMARY_UNKNOWN+1))
     fi
 
-    if [ "${5}" -lt "${SUMMARY_MIN_DIFF}" ] || [ "${SUMMARY_MIN_DIFF}" -eq 0 ]; then
+    if [ "${1}" -eq 3 ] || [ "${5}" -lt "${SUMMARY_MIN_DIFF}" ] || [ "${SUMMARY_MIN_DIFF}" -eq 0 ]; then
         SUMMARY_MIN_DATE="${4}"
         SUMMARY_MIN_DIFF="${5}"
         SUMMARY_MIN_HOST="${2}"
         SUMMARY_MIN_PORT="${3}"
     fi
+}
+
+#############################################################
+# Purpose: Record an unknown certificate check result
+# Arguments:
+#   $1 -> Hostname
+#   $2 -> TCP Port
+#   $3 -> Status message
+#############################################################
+report_unknown()
+{
+    prints "${1}" "${2}" "${3}" "Unknown" 0 "" "" ""
+    set_returncode 3
+    set_summary 3 "${1}" "${2}" "${3}" 0
+}
+
+#############################################################
+# Purpose: Search a file if it still exists
+# Arguments:
+#   $1 -> grep pattern
+#   $2 -> file to search
+#############################################################
+grep_file()
+{
+    [ -r "${2}" ] && "${GREP}" -i -q -- "${1}" "${2}"
+}
+
+#############################################################
+# Purpose: Search temporary OpenSSL output files if they exist
+# Arguments:
+#   $1 -> grep pattern
+#############################################################
+grep_openssl_output()
+{
+    if [ -r "${ERROR_TMP}" ] && "${GREP}" -i -q -- "${1}" "${ERROR_TMP}"; then
+        return 0
+    fi
+
+    [ -r "${CERT_TMP}" ] && "${GREP}" -i -q -- "${1}" "${CERT_TMP}"
 }
 
 ##########################################
@@ -650,55 +719,82 @@ usage()
 ##########################################################################
 check_server_status() {
 
+    HOSTNAME="$1"
     PORT="$2"
     case "$PORT" in
-        smtp|25|submission|587) TLSFLAG="-starttls smtp";;
-        pop3|110)               TLSFLAG="-starttls pop3";;
-        imap|143)               TLSFLAG="-starttls imap";;
-        ftp|21)                 TLSFLAG="-starttls ftp";;
-        xmpp|5222)              TLSFLAG="-starttls xmpp";;
-        xmpp-server|5269)       TLSFLAG="-starttls xmpp-server";;
-        irc|194)                TLSFLAG="-starttls irc";;
-        postgres|5432)          TLSFLAG="-starttls postgres";;
-        mysql|3306)             TLSFLAG="-starttls mysql";;
-        lmtp|24)                TLSFLAG="-starttls lmtp";;
-        nntp|119)               TLSFLAG="-starttls nntp";;
-        sieve|4190)             TLSFLAG="-starttls sieve";;
-        ldap|389)               TLSFLAG="-starttls ldap";;
-        *)                      TLSFLAG="";;
+        smtp|25|submission|587) TLSFLAG=( "-starttls" "smtp" );;
+        pop3|110)               TLSFLAG=( "-starttls" "pop3" );;
+        imap|143)               TLSFLAG=( "-starttls" "imap" );;
+        ftp|21)                 TLSFLAG=( "-starttls" "ftp" );;
+        xmpp|5222)              TLSFLAG=( "-starttls" "xmpp" );;
+        xmpp-server|5269)       TLSFLAG=( "-starttls" "xmpp-server" );;
+        irc|194)                TLSFLAG=( "-starttls" "irc" );;
+        postgres|5432)          TLSFLAG=( "-starttls" "postgres" );;
+        mysql|3306)             TLSFLAG=( "-starttls" "mysql" );;
+        lmtp|24)                TLSFLAG=( "-starttls" "lmtp" );;
+        nntp|119)               TLSFLAG=( "-starttls" "nntp" );;
+        sieve|4190)             TLSFLAG=( "-starttls" "sieve" );;
+        ldap|389)               TLSFLAG=( "-starttls" "ldap" );;
+        *)                      TLSFLAG=();;
     esac
 
-    if [ "${TLSSERVERNAME}" = "FALSE" ]; then
-        OPTIONS="-connect ${1}:${2} $TLSFLAG"
-    else
-        OPTIONS="-connect ${1}:${2} -servername ${1} $TLSFLAG"
+    CONNECT_HOST="${HOSTNAME}"
+    if [[ "${CONNECT_HOST}" == *:* && "${CONNECT_HOST}" != \[*\] ]]; then
+        CONNECT_HOST="[${CONNECT_HOST}]"
     fi
 
-    echo "" | "${OPENSSL}" s_client $OPTIONS 2> "${ERROR_TMP}" 1> "${CERT_TMP}"
+    OPTIONS=( "-connect" "${CONNECT_HOST}:${PORT}" )
 
-    if "${GREP}" -i "Connection refused" "${ERROR_TMP}" > /dev/null; then
-        prints "${1}" "${2}" "Connection refused" "Unknown"
-        set_returncode 3
-    elif "${GREP}" -i "No route to host" "${ERROR_TMP}" > /dev/null; then
-        prints "${1}" "${2}" "No route to host" "Unknown"
-        set_returncode 3
-    elif "${GREP}" -i "gethostbyname failure" "${ERROR_TMP}" > /dev/null; then
-        prints "${1}" "${2}" "Cannot resolve domain" "Unknown"
-        set_returncode 3
-    elif "${GREP}" -i "Operation timed out" "${ERROR_TMP}" > /dev/null; then
-        prints "${1}" "${2}" "Operation timed out" "Unknown"
-        set_returncode 3
-    elif "${GREP}" -i "ssl handshake failure" "${ERROR_TMP}" > /dev/null; then
-        prints "${1}" "${2}" "SSL handshake failed" "Unknown"
-        set_returncode 3
-    elif "${GREP}" -i "connect: Connection timed out" "${ERROR_TMP}" > /dev/null; then
-        prints "${1}" "${2}" "Connection timed out" "Unknown"
-        set_returncode 3
-    elif "${GREP}" -i "Name or service not known" "${ERROR_TMP}" > /dev/null; then
-        prints "${1}" "${2}" "Unable to resolve the DNS name ${1}" "Unknown"
-        set_returncode 3
+    if [ "${TLSSERVERNAME}" != "FALSE" ]; then
+        OPTIONS+=( "-servername" "${HOSTNAME}" )
+    fi
+
+    if [ "${TLSVERIFYRETURN}" = "TRUE" ]; then
+        OPTIONS+=( "-verify_return_error" )
+    fi
+
+    if [ "${TLSVERIFYHOSTNAME}" = "TRUE" ]; then
+        OPTIONS+=( "-verify_hostname" "${HOSTNAME}" )
+    fi
+
+    OPTIONS+=( "${TLSFLAG[@]}" )
+
+    if [ -n "${TIMEOUT}" ]; then
+        "${TIMEOUT}" "${TIMEOUT_SECONDS}" "${OPENSSL}" s_client "${OPTIONS[@]}" \
+            < /dev/null 2> "${ERROR_TMP}" 1> "${CERT_TMP}"
+        OPENSSL_STATUS=$?
     else
-        check_file_status "${CERT_TMP}" "${1}" "${2}"
+        "${OPENSSL}" s_client "${OPTIONS[@]}" \
+            < /dev/null 2> "${ERROR_TMP}" 1> "${CERT_TMP}"
+        OPENSSL_STATUS=$?
+    fi
+
+    if [ "${OPENSSL_STATUS}" -eq 124 ] || [ "${OPENSSL_STATUS}" -eq 137 ]; then
+        report_unknown "${HOSTNAME}" "${PORT}" "Connection timed out"
+    elif grep_file "Connection refused" "${ERROR_TMP}"; then
+        report_unknown "${HOSTNAME}" "${PORT}" "Connection refused"
+    elif grep_file "No route to host" "${ERROR_TMP}"; then
+        report_unknown "${HOSTNAME}" "${PORT}" "No route to host"
+    elif grep_file "gethostbyname failure" "${ERROR_TMP}"; then
+        report_unknown "${HOSTNAME}" "${PORT}" "Cannot resolve domain"
+    elif grep_file "Operation timed out" "${ERROR_TMP}"; then
+        report_unknown "${HOSTNAME}" "${PORT}" "Operation timed out"
+    elif grep_file "ssl handshake failure" "${ERROR_TMP}"; then
+        report_unknown "${HOSTNAME}" "${PORT}" "SSL handshake failed"
+    elif grep_file "connect: Connection timed out" "${ERROR_TMP}"; then
+        report_unknown "${HOSTNAME}" "${PORT}" "Connection timed out"
+    elif grep_file "Name or service not known" "${ERROR_TMP}"; then
+        report_unknown "${HOSTNAME}" "${PORT}" "Unable to resolve DNS name"
+    elif grep_openssl_output "verify error"; then
+        report_unknown "${HOSTNAME}" "${PORT}" "Certificate verify failed"
+    elif grep_openssl_output "Verification error:"; then
+        report_unknown "${HOSTNAME}" "${PORT}" "Certificate verify failed"
+    elif grep_file "Verify return code: [1-9]" "${CERT_TMP}"; then
+        report_unknown "${HOSTNAME}" "${PORT}" "Certificate verify failed"
+    elif [ "${OPENSSL_STATUS}" -ne 0 ] && [ ! -s "${CERT_TMP}" ]; then
+        report_unknown "${HOSTNAME}" "${PORT}" "TLS connection failed"
+    else
+        check_file_status "${CERT_TMP}" "${HOSTNAME}" "${PORT}"
     fi
 }
 
@@ -719,7 +815,7 @@ check_file_status() {
     if [ ! -r "${CERTFILE}" ] || [ ! -s "${CERTFILE}" ]; then
         echo "ERROR: The file named ${CERTFILE} is unreadable or doesn't exist"
         echo "ERROR: Please check to make sure the certificate for ${HOST}:${PORT} is valid"
-        set_returncode 3
+        report_unknown "${HOST}" "${PORT}" "Unreadable certificate"
         return
     fi
 
@@ -727,51 +823,56 @@ check_file_status() {
     if [ "${PKCSDBPASSWD}" != "" ]; then
         # Extract the certificate from the PKCS#12 database, and
         # send the informational message to /dev/null
-        "${OPENSSL}" pkcs12 -nokeys -in "${CERTFILE}" \
-                   -out "${CERT_TMP}" -clcerts -password pass:"${PKCSDBPASSWD}" 2> /dev/null
+        if ! "${OPENSSL}" pkcs12 -nokeys -in "${CERTFILE}" \
+                   -out "${CERT_TMP}" -clcerts -password pass:"${PKCSDBPASSWD}" 2> "${ERROR_TMP}"; then
+            report_unknown "${HOST}" "${PORT}" "Unable to read PKCS12 file"
+            return
+        fi
 
-        # Extract the expiration date from the certificate
-        CERTDATE=$("${OPENSSL}" x509 -in "${CERT_TMP}" -enddate -noout | \
-                   "${SED}" 's/notAfter\=//')
-
-        # Extract the issuer from the certificate
-        CERTISSUER=$("${OPENSSL}" x509 -in "${CERT_TMP}" -issuer -noout | \
-                     "${AWK}" 'BEGIN {RS=", " } $0 ~ /^O =/
-                                 { print substr($0,5,17)}')
-
-        ### Grab the common name (CN) from the X.509 certificate
-        COMMONNAME=$("${OPENSSL}" x509 -in "${CERT_TMP}" -subject -noout | \
-                     "${SED}" -e 's/.*CN = //' | \
-                     "${SED}" -e 's/, .*//')
-
-        ### Grab the serial number from the X.509 certificate
-        SERIAL=$("${OPENSSL}" x509 -in "${CERT_TMP}" -serial -noout | \
-                 "${SED}" -e 's/serial=//')
+        CERT_SOURCE="${CERT_TMP}"
+        INFORM_ARGS=()
     else
-        # Extract the expiration date from the ceriticate
-        CERTDATE=$("${OPENSSL}" x509 -in "${CERTFILE}" -enddate -noout -inform "${CERTTYPE}" | \
-                   "${SED}" 's/notAfter\=//')
-
-        # Extract the issuer from the certificate
-        CERTISSUER=$("${OPENSSL}" x509 -in "${CERTFILE}" -issuer -noout -inform "${CERTTYPE}" | \
-                     "${AWK}" 'BEGIN {RS=", " } $0 ~ /^O =/ { print substr($0,5,17)}')
-
-        ### Grab the common name (CN) from the X.509 certificate
-        COMMONNAME=$("${OPENSSL}" x509 -in "${CERTFILE}" -subject -noout -inform "${CERTTYPE}" | \
-                     "${SED}" -e 's/.*CN = //' | \
-                     "${SED}" -e 's/, .*//')
-
-        ### Grab the serial number from the X.509 certificate
-        SERIAL=$("${OPENSSL}" x509 -in "${CERTFILE}" -serial -noout -inform "${CERTTYPE}" | \
-                 "${SED}" -e 's/serial=//')
+        CERT_SOURCE="${CERTFILE}"
+        INFORM_ARGS=( "-inform" "${CERTTYPE}" )
     fi
 
-    ### Split the result into parameters, and pass the relevant pieces to date2julian
-    set -- ${CERTDATE}
-    MONTH=$(getmonth "${1}")
+    # Extract the expiration date from the certificate. If parsing fails, this
+    # is an unknown check result, not an expired certificate.
+    if ! CERTDATE_OUTPUT=$("${OPENSSL}" x509 -in "${CERT_SOURCE}" -enddate -noout "${INFORM_ARGS[@]}" 2> "${ERROR_TMP}"); then
+        report_unknown "${HOST}" "${PORT}" "Unable to parse certificate"
+        return
+    fi
+
+    CERTDATE=${CERTDATE_OUTPUT#notAfter=}
+    if [ "${CERTDATE}" = "${CERTDATE_OUTPUT}" ] || [ -z "${CERTDATE}" ]; then
+        report_unknown "${HOST}" "${PORT}" "Unable to parse certificate date"
+        return
+    fi
+
+    # Extract the issuer from the certificate
+    CERTISSUER=$("${OPENSSL}" x509 -in "${CERT_SOURCE}" -issuer -noout "${INFORM_ARGS[@]}" 2> /dev/null | \
+                 "${SED}" -n 's/.*O[[:space:]]*=[[:space:]]*\([^,]*\).*/\1/p')
+
+    ### Grab the common name (CN) from the X.509 certificate
+    COMMONNAME=$("${OPENSSL}" x509 -in "${CERT_SOURCE}" -subject -noout "${INFORM_ARGS[@]}" 2> /dev/null | \
+                 "${SED}" -n 's/.*CN[[:space:]]*=[[:space:]]*\([^,]*\).*/\1/p')
+
+    ### Grab the serial number from the X.509 certificate
+    SERIAL=$("${OPENSSL}" x509 -in "${CERT_SOURCE}" -serial -noout "${INFORM_ARGS[@]}" 2> /dev/null | \
+             "${SED}" -e 's/serial=//')
+
+    ### Split the result, and pass the relevant pieces to date2julian
+    read -r CERT_MONTH CERT_DAY _ CERT_YEAR _ <<< "${CERTDATE}"
+    MONTH=$(getmonth "${CERT_MONTH}")
+
+    if [ "${MONTH}" -eq 0 ] || [ -z "${CERT_DAY}" ] || [ -z "${CERT_YEAR}" ] || \
+       ! [[ "${CERT_DAY}" =~ ^[0-9]+$ ]] || ! [[ "${CERT_YEAR}" =~ ^[0-9]+$ ]]; then
+        report_unknown "${HOST}" "${PORT}" "Unable to parse certificate date"
+        return
+    fi
 
     # Convert the date to seconds, and get the diff between NOW and the expiration date
-    CERTJULIAN=$(date2julian "${MONTH#0}" "${2#0}" "${4}")
+    CERTJULIAN=$(date2julian "${MONTH#0}" "${CERT_DAY#0}" "${CERT_YEAR}")
     CERTDIFF=$(date_diff "${NOWJULIAN}" "${CERTJULIAN}")
 
     if [ "${CERTDIFF}" -lt 0 ]; then
@@ -797,7 +898,7 @@ check_file_status() {
     fi
 
     set_returncode "${RETCODE_LOCAL}"
-    MIN_DATE=$(echo "${CERTDATE}" | "${AWK}" '{ print $1, $2, $4 }')
+    MIN_DATE="${CERT_MONTH} ${CERT_DAY} ${CERT_YEAR}"
     set_summary "${RETCODE_LOCAL}" "${HOST}" "${PORT}" "${MIN_DATE}" "${CERTDIFF}"
 }
 
@@ -834,6 +935,16 @@ do
            exit 1;;
     esac
 done
+
+if ! [[ "${WARNDAYS}" =~ ^[0-9]+$ ]]; then
+    echo "ERROR: The warning interval must be a non-negative integer."
+    exit 1
+fi
+
+if ! [[ "${TIMEOUT_SECONDS}" =~ ^[0-9]+$ ]] || [ "${TIMEOUT_SECONDS}" -eq 0 ]; then
+    echo "ERROR: TIMEOUT_SECONDS must be a positive integer."
+    exit 1
+fi
 
 ### Check to make sure a openssl utility is available
 if [ ! -f "${OPENSSL}" ]; then
@@ -878,15 +989,30 @@ if [ "${ALARM}" = "TRUE" ] && [ ! -f "${MAIL}" ]; then
 fi
 
 # Send along the servername when TLS is used
-if ${OPENSSL} s_client -help 2>&1 | grep '-servername' > /dev/null; then
+if "${OPENSSL}" s_client -help 2>&1 | "${GREP}" -q -- '-servername'; then
     TLSSERVERNAME="TRUE"
 else
     TLSSERVERNAME="FALSE"
 fi
 
+# Fail remote checks when OpenSSL can verify the chain or hostname and finds
+# a problem. Older OpenSSL releases may not support these flags.
+if "${OPENSSL}" s_client -help 2>&1 | "${GREP}" -q -- '-verify_return_error'; then
+    TLSVERIFYRETURN="TRUE"
+else
+    TLSVERIFYRETURN="FALSE"
+fi
+
+if "${OPENSSL}" s_client -help 2>&1 | "${GREP}" -q -- '-verify_hostname'; then
+    TLSVERIFYHOSTNAME="TRUE"
+else
+    TLSVERIFYHOSTNAME="FALSE"
+fi
+
 # Place to stash temporary files
-CERT_TMP=$($MKTEMP /var/tmp/cert.XXXXXX)
-ERROR_TMP=$($MKTEMP /var/tmp/error.XXXXXX)
+TMPDIR=${TMPDIR:-/tmp}
+CERT_TMP=$("${MKTEMP}" "${TMPDIR%/}/cert.XXXXXX")
+ERROR_TMP=$("${MKTEMP}" "${TMPDIR%/}/error.XXXXXX")
 
 ### Baseline the dates so we have something to compare to
 MONTH=$(${DATE} "+%m")
@@ -911,22 +1037,30 @@ if [ "${HOST}" != "" ]; then
 ### If a file is passed to the "-f" option on the command line, check
 ### each certificate or server / port combination in the file to see if
 ### they are about to expire
-elif [ -f "${SERVERFILE}" ]; then
+elif [ "${SERVERFILE}" != "" ]; then
     print_heading
 
-    IFS=$'\n'
-    for LINE in $(grep -E -v '(^#|^$)' "${SERVERFILE}")
-    do
-        HOST=${LINE%% *}
-        PORT=${LINE##* }
-        IFS=" "
-        if [ "$PORT" = "FILE" ]; then
-            check_file_status "${HOST}" "FILE" "${HOST}"
-        else
-            check_server_status "${HOST}" "${PORT}"
-        fi
-    done
-    IFS="${OLDIFS}"
+    if [ ! -r "${SERVERFILE}" ]; then
+        report_unknown "FILE" "${SERVERFILE}" "Unable to read server file"
+    else
+        # shellcheck disable=SC2094 # This loop reads SERVERFILE and writes status to stdout/temp files.
+        while IFS= read -r LINE || [ -n "${LINE}" ]; do
+            if [[ "${LINE}" =~ ^[[:space:]]*$ ]] || [[ "${LINE}" =~ ^[[:space:]]*# ]]; then
+                continue
+            fi
+
+            if [[ "${LINE}" =~ ^[[:space:]]*(.+)[[:space:]]+FILE[[:space:]]*$ ]]; then
+                CERTPATH=${BASH_REMATCH[1]}
+                check_file_status "${CERTPATH}" "FILE" "${CERTPATH}"
+            elif [[ "${LINE}" =~ ^[[:space:]]*([^[:space:]]+)[[:space:]]+([^[:space:]]+)[[:space:]]*$ ]]; then
+                HOST=${BASH_REMATCH[1]}
+                PORT=${BASH_REMATCH[2]}
+                check_server_status "${HOST}" "${PORT}"
+            else
+                report_unknown "FILE" "${SERVERFILE}" "Malformed input line"
+            fi
+        done < "${SERVERFILE}"
+    fi
     print_summary
 ### Check to see if the certificate in CERTFILE is about to expire
 elif [ "${CERTFILE}" != "" ]; then
@@ -935,11 +1069,15 @@ elif [ "${CERTFILE}" != "" ]; then
     print_summary
 
 ### Check to see if the certificates in CERTDIRECTORY are about to expire
-elif [ "${CERTDIRECTORY}" != "" ] && ("${FIND}" -L "${CERTDIRECTORY}" -type f > /dev/null 2>&1); then
+elif [ "${CERTDIRECTORY}" != "" ]; then
     print_heading
-    for FILE in $("${FIND}" -L "${CERTDIRECTORY}" -type f); do
-        check_file_status "${FILE}" "FILE" "${FILE}"
-    done
+    if ! "${FIND}" -L "${CERTDIRECTORY}" -type f > /dev/null 2>&1; then
+        report_unknown "DIRECTORY" "${CERTDIRECTORY}" "Unable to read directory"
+    else
+        while IFS= read -r -d '' FILE; do
+            check_file_status "${FILE}" "FILE" "${FILE}"
+        done < <("${FIND}" -L "${CERTDIRECTORY}" -type f -print0)
+    fi
     print_summary
 ### There was an error, so print a detailed usage message and exit
 else
