@@ -377,7 +377,7 @@ umask 077
 # Purpose: Remove temporary files if the script doesn't
 #          exit() cleanly
 #####################################################
-# shellcheck disable=SC2329 # Invoked indirectly by trap.
+# shellcheck disable=SC2317,SC2329 # Invoked indirectly by trap.
 cleanup() {
     if [ -n "${CERT_TMP:-}" ] && [ -f "${CERT_TMP}" ]; then
         rm -f "${CERT_TMP}"
