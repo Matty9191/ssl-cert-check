@@ -54,7 +54,7 @@ run_check() {
 }
 
 assert_no_internal_errors() {
-    [ "${stderr}" = "" ]
+    [ "${stderr:-}" = "" ]
     [[ "${output}" != *"/bin/grep:"* ]]
     [[ "${output}" != *"No such file or directory"* ]]
     [[ "${output}" != *"integer expression expected"* ]]
