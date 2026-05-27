@@ -37,7 +37,7 @@ PROGRAMVERSION=5.0
 #    are documented here: http://mywiki.wooledge.org/BashFAQ/050
 #
 # Version 4.9
-#  - Add a signal handler to call the cleanup funtion
+#  - Add a signal handler to call the cleanup function
 #    if the script doesn't exit() cleanly -- Timothe Litt
 #
 # Version 4.8
@@ -295,7 +295,7 @@ ADMIN="root"
 # Email sender address for alarm notifications
 SENDER=""
 
-# Number of days in the warning threshhold (cmdline: -x)
+# Number of days in the warning threshold (cmdline: -x)
 WARNDAYS=30
 
 # If QUIET is set to TRUE, don't print anything on the console (cmdline: -q)
@@ -610,7 +610,7 @@ set_returncode()
 }
 
 ########################################################################
-# Purpose: Set certificate counters and informations for nagios summary
+# Purpose: Set certificate counters and information for nagios summary
 # Arguments:
 #   $1 -> Status of certificate (0: valid, 1: will expire, 2: expired)
 #   $2 -> Hostname
@@ -701,7 +701,7 @@ usage()
     echo "  -N                : Run as a Nagios plugin and output one line summary (implies -n, requires -f or -d)"
     echo "  -p port           : Port to connect to (interactive mode)"
     echo "  -q                : Don't print anything on the console"
-    echo "  -s commmon name   : Server to connect to (interactive mode)"
+    echo "  -s common name    : Server to connect to (interactive mode)"
     echo "  -S                : Print validation information"
     echo "  -t type           : Specify the certificate type"
     echo "  -V                : Print version information"
